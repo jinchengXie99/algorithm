@@ -1,0 +1,1 @@
+"..\User\Source\Hardware\EXTIInit.c" LARGE OMF2 WARNINGLEVEL (0) OPTIMIZE (9,SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\EXTIInit.lst) TABS (2) OBJECT(.\Output\EXTIInit.obj)

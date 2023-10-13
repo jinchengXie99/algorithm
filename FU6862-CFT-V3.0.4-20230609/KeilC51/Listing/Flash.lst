@@ -1,0 +1,280 @@
+C51 COMPILER V9.60.7.0   FLASH                                                             08/30/2023 13:47:07 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE FLASH
+OBJECT MODULE PLACED IN .\Output\Flash.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Function\Flash.c LARGE OMF2 WARNINGLEVEL(0) OPTIMIZE(9,SP
+                    -EED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\Flash.lst) TABS(2) OBJECT(.\
+                    -Output\Flash.obj)
+
+line level    source
+
+   1          /*  -------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen ---------------------------*/
+   2          /**
+   3           * @copyright (C) COPYRIGHT 2022 Fortiortech Shenzhen
+   4           * @file      
+   5           * @author    Fortiortech  Appliction Team
+   6           * @since     Create:2022-07-14
+   7           * @date      Last modify:2022-07-14
+   8           * @note      Last modify author is Leo.li
+   9           * @brief      
+  10           */
+  11          
+  12          /* Includes ------------------------------------------------------------------*/
+  13          #include <FU68xx_2.h>
+  14          #include <Myproject.h>
+  15          
+  16          ROM_TypeDef xdata  Rom;
+  17          
+  18          uint8 Flash_GetAddress(void);
+  19          
+  20          uint8 FlashPieceNum = 0;
+  21          
+  22          
+  23          uint8 xdata table1[] = {0, 0, 0, 0, 0};
+  24          /**
+  25           * @brief        读取固定地址值
+  26           * @date         2022-07-14
+  27           */
+  28          uint8 ReadFlashValue(uint16 ReadAddress)
+  29          {
+  30   1          uint16 TempAddress0 = ReadAddress;
+  31   1          __IO uint8 tevalue = 0;        //临时变量
+  32   1          tevalue = *(uint8 code *)TempAddress0;   //读取回地址的值
+  33   1          return tevalue;
+  34   1      }
+  35          
+  36          /**
+  37           * @brief        擦除指定扇区
+  38           * @brief        WriteAddress--指定写入地址
+  39           * @brief        value--写入数值
+  40           * @date         2022-07-14
+  41           */
+  42          void Flash_KeyWriteValue(uint16 WriteAddress, uint8 value)
+  43          {
+  44   1          uint8 i;
+  45   1          uint8 TempReadRomValue;
+  46   1          uint16 FlashWriteAddr = WriteAddress;
+  47   1          __IO uint8 revalue = 0;        //返回值
+  48   1          TempReadRomValue = Rom.ReadValue;
+  49   1          Rom.WriteValue   = value;
+  50   1          
+  51   1          for (i = 0; ((Rom.WriteValue != TempReadRomValue) && (i < 5)); i++)
+  52   1          {
+  53   2              revalue = Flash_Sector_Write(FlashWriteAddr, Rom.WriteValue);
+C51 COMPILER V9.60.7.0   FLASH                                                             08/30/2023 13:47:07 PAGE 2   
+
+  54   2              
+  55   2              if (revalue == 1) //无效操作
+  56   2              {
+  57   3                  TempReadRomValue = 0; //写入错误
+  58   3              }
+  59   2              
+  60   2              TempReadRomValue = *(uint8 code *)(FlashWriteAddr);
+  61   2          }
+  62   1          
+  63   1          if (Rom.WriteValue == TempReadRomValue)
+  64   1          {
+  65   2              Rom.ReadValue = TempReadRomValue;
+  66   2          }                                                                    //读出有效数据
+  67   1      }
+  68          
+  69          /**
+  70           * @brief        擦除指定扇区
+  71           * @brief        FlashAddress--Flash自擦除扇区内任意地址
+  72           * @return       0--Flash自擦除成功，1--Flash自擦除失败
+  73           * @date         2022-07-14
+  74           */
+  75          uint8 Flash_Sector_Erase(uint8 xdata * FlashAddress)
+  76          {
+  77   1          bool TempEA;
+  78   1          uint16 TempFlashAddress;
+  79   1          TempEA = EA;
+  80   1          EA = 0;
+  81   1          TempFlashAddress = FlashAddress;
+  82   1          
+  83   1          if ((TempFlashAddress) < (0x3f80))      // 不擦除最后一个扇区
+  84   1          {
+  85   2              FLA_CR = 0x03;                                   //使能自擦除
+  86   2              FLA_KEY = 0x5a;
+  87   2              FLA_KEY = 0x1f;                                   //flash预编程解锁
+  88   2              _nop_();
+  89   2              *FlashAddress = 0xff;                   //写任意数据
+  90   2              FLA_CR = 0x08;                                   //开始预编程，完成后Flash再次上锁
+  91   2          }
+  92   1          
+  93   1          EA = TempEA;
+  94   1          
+  95   1          if (ReadBit(FLA_CR, FLAERR))
+  96   1          {
+  97   2              return 1;
+  98   2          }
+  99   1          else
+ 100   1          {
+ 101   2              return 0;
+ 102   2          }
+ 103   1      }
+ 104          
+ 105          /**
+ 106           * @brief        擦除指定扇区
+ 107           * @brief        FlashAddress--指定写入地址
+ 108           * @brief        FlashData--写入数值
+ 109           * @return       0--Flash自擦除成功，1--Flash自擦除失败
+ 110           * @date         2022-07-14
+ 111           */
+ 112          uint8 Flash_Sector_Write(uint8 xdata * FlashAddress, uint8 FlashData)
+ 113          {
+ 114   1          bool TempEA = 0;
+ 115   1          uint16 TempFlashAddress;
+C51 COMPILER V9.60.7.0   FLASH                                                             08/30/2023 13:47:07 PAGE 3   
+
+ 116   1          TempEA = EA;
+ 117   1          EA = 0;
+ 118   1          TempFlashAddress = FlashAddress;
+ 119   1          
+ 120   1          if ((TempFlashAddress) < 0x3f80)        // 不编程最后一个扇区
+ 121   1          {
+ 122   2              FLA_CR = 0x01;              // 使能Flash编程
+ 123   2              FLA_KEY = 0x5a;
+ 124   2              FLA_KEY = 0x1f;             // flash预编程解锁
+ 125   2              _nop_();
+ 126   2              *FlashAddress = FlashData;  // 写编程数据
+ 127   2              FLA_CR = 0x08;              // 开始预编程，完成后Flash再次上锁
+ 128   2          }
+ 129   1          
+ 130   1          EA = TempEA;
+ 131   1          
+ 132   1          if (ReadBit(FLA_CR, FLAERR))
+ 133   1          {
+ 134   2              return 1;
+ 135   2          }
+ 136   1          else
+ 137   1          {
+ 138   2              return 0;
+ 139   2          }
+ 140   1      }
+ 141          
+ 142          /**
+ 143           * @brief        保存按键
+ 144           * @date         2022-07-14
+ 145           */
+ 146          void  Save_KeyValue(void)
+ 147          {
+ 148   1          if((mcFaultDect.VoltDetecBraketCount <= 0) && (heat_Lv != heat_Lv_Init) && (heat_Lv != 0))
+ 149   1          {
+ 150   2              __IO uint8 revalue = 0;        //返回值
+ 151   2              
+ 152   2              if (Rom.FlagFlashWrite == 0)
+ 153   2              {
+ 154   3      //        
+ 155   3      //        Rom.WriteValue = KS.KeyValuetotal;   //档位存储
+ 156   3      //        if(Rom.ReadValue != Rom.WriteValue)  //确认写入前后数据不一致
+ 157   3      //    {
+ 158   3                  EA = 0; 
+ 159   3      //      if ((Rom.ReadValue == 0x11) || (Rom.ReadValue == 0x21) || (Rom.ReadValue == 0x41) || (Rom.ReadValue =
+             -= 0x12) || (Rom.ReadValue == 0x22)
+ 160   3      //        || (Rom.ReadValue == 0x42) || (Rom.ReadValue == 0x14) || (Rom.ReadValue == 0x24) || (Rom.ReadValue =
+             -= 0x44) || (Rom.ReadValue == 0x18)
+ 161   3      //        || (Rom.ReadValue == 0x28) || (Rom.ReadValue == 0x48))
+ 162   3      //      {
+ 163   3      //        revalue = Flash_Sector_Erase(Rom.WriteAddress);     //擦除扇区
+ 164   3      //        
+ 165   3      //        if (! revalue)
+ 166   3      //        {
+ 167   3      //          Flash_KeyWriteValue(Rom.WriteAddress, Rom.WriteValue);     //指定地址写值
+ 168   3      //          Rom.ReadValue = Rom.WriteValue;
+ 169   3      //          Rom.FlagFlashWrite = 1;
+ 170   3      //        }
+ 171   3      //        else
+ 172   3      //        {
+ 173   3      //          Rom.ReadValue = 0;
+ 174   3      //        }
+ 175   3      //      }
+C51 COMPILER V9.60.7.0   FLASH                                                             08/30/2023 13:47:07 PAGE 4   
+
+ 176   3      //      else
+ 177   3      //      {
+ 178   3      //        revalue = Flash_Sector_Erase(Rom.WriteAddress);     //擦除扇区
+ 179   3      //        
+ 180   3      //        if (! revalue)
+ 181   3      //        {
+ 182   3      //          Flash_KeyWriteValue(Rom.WriteAddress, 0x21);     //指定地址写值
+ 183   3      //          Rom.ReadValue = 0x21;
+ 184   3      //          Rom.FlagFlashWrite = 1;
+ 185   3      //        }
+ 186   3      //        else
+ 187   3      //        {
+ 188   3      //          Rom.ReadValue = 0;
+ 189   3      //        }
+ 190   3      //      }
+ 191   3                  #if (SPEED_MODE == KEYSCANMODE)
+                          {
+                              if(FlashPieceNum >= 25)
+                              {
+                                  Flash_Sector_Erase(Rom.WriteAddress);     //擦除扇区
+                                  FlashPieceNum = 0;
+                              }
+              
+                              Flash_Sector_Write( (Rom.WriteAddress + FlashPieceNum*5), 0xA5);
+                              _nop_();
+                        
+                              Flash_Sector_Write( (Rom.WriteAddress + FlashPieceNum*5 + 1), (uint8)(RuntimeCntXn >> 8) )
+             -;
+                              _nop_();
+                              Flash_Sector_Write( (Rom.WriteAddress + FlashPieceNum*5 + 2), (uint8)(RuntimeCntXn) );
+                              _nop_();
+                              Flash_Sector_Write( (Rom.WriteAddress + FlashPieceNum*5 + 3), RuntimeCntX1min);
+                              _nop_();
+                              Flash_Sector_Write( (Rom.WriteAddress + FlashPieceNum*5 + 4), Keysavevalue);    
+                              _nop_();
+                              
+                              FlashPieceNum++;
+                          }
+                          #elif (SPEED_MODE == TOUCHMODE)
+ 214   3                  {
+ 215   4                      if(BlockFlashNum >= 128)    // 一个扇区128个字节，算上首地址，BlockFlashNum�
+             -��围应在0-127
+ 216   4                      {
+ 217   5                          Flash_Sector_Erase(Rom.WriteAddress);   // 扇区写满，需要擦除
+ 218   5                          BlockFlashNum = 0;                      // 清0自加
+ 219   5                      }
+ 220   4                      Flash_Sector_Write( (Rom.WriteAddress + BlockFlashNum), Keysavevalue);    // 自加是为�
+             -��防止断电掉电过程中或电源调整欠压，芯片未掉电再次写数据出错
+ 221   4                      _nop_();
+ 222   4                      BlockFlashNum++;                        // 上一个字节写入数据后自加一个地�
+             -�，下次写入数据直接调用
+ 223   4                  }
+ 224   3                  #endif
+ 225   3            
+ 226   3                  Rom.FlagFlashWrite = 1;
+ 227   3            
+ 228   3            EA = 1;
+ 229   3              }
+ 230   2          
+ 231   2              if(Rom.FlagFlashWrite)
+ 232   2              {
+ 233   3                  heat_Lv_Init       = heat_Lv;
+C51 COMPILER V9.60.7.0   FLASH                                                             08/30/2023 13:47:07 PAGE 5   
+
+ 234   3                  Rom.FlagFlashWrite = 0;
+ 235   3              }
+ 236   2          }
+ 237   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    359    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     11       7
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       2
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

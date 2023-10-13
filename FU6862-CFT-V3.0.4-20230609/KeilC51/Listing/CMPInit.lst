@@ -1,0 +1,136 @@
+C51 COMPILER V9.60.7.0   CMPINIT                                                           08/30/2023 13:47:07 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE CMPINIT
+OBJECT MODULE PLACED IN .\Output\CMPInit.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Hardware\CMPInit.c LARGE OMF2 WARNINGLEVEL(0) OPTIMIZE(9,
+                    -SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\CMPInit.lst) TABS(2) OBJEC
+                    -T(.\Output\CMPInit.obj)
+
+line level    source
+
+   1          /*  -------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen ---------------------------*/
+   2          /**
+   3           * @copyright (C) COPYRIGHT 2022 Fortiortech Shenzhen
+   4           * @file      
+   5           * @author    Fortiortech  Appliction Team
+   6           * @since     Create:2022-07-14
+   7           * @date      Last modify:2022-07-14
+   8           * @note      Last modify author is Leo.li
+   9           * @brief      
+  10           */
+  11          
+  12          
+  13          /* Includes -------------------------------------------------------------------------------------*/
+  14          #include <FU68xx_2.h>
+  15          #include <Myproject.h>
+  16          
+  17          
+  18          /** 
+  19           * @brief       比较器3初始化,用于硬件过流保护
+  20           * @data        2022/08/12
+  21           */ 
+  22          void CMP3_Init(void)
+  23          {
+  24   1          #if (Shunt_Resistor_Mode == Single_Resistor)
+  25   1          {
+  26   2              SetBit(P2_AN, P27);                                // CMP3
+  27   2              
+  28   2              SetReg(CMP_CR1, CMP3MOD1 | CMP3MOD0, 0x0);
+  29   2          }
+  30   1          #elif (Shunt_Resistor_Mode == Double_Resistor)
+                  {
+                  SetBit(P2_AN, P27);                                // CMP3        
+                      SetReg(CMP_CR1, CMP3MOD1 | CMP3MOD0, 0x0);
+                  }
+                #elif (Shunt_Resistor_Mode == Three_Resistor)
+                {
+                      SetBit(P2_AN , P27 | P23 | P20);
+                      SetReg(CMP_CR1, CMP3MOD1|CMP3MOD0,CMP3MOD1|CMP3MOD0);
+                }
+                  #endif  //end Shunt_Resistor_Mode
+  41   1        
+  42   1          #if (Compare_Mode == Compare_Hardware)
+                  {
+                      /**P2.6使能其模拟功能，使能数字输出**/
+                      SetBit(P2_AN, P26);
+                      SetBit(P2_OE, P26);
+                      ClrBit(DAC_CR, DAC_EN );
+                  }
+                  #else
+  50   1          {
+  51   2              /******************************
+  52   2                  0: 正常模式，DAC输出电压范围为0到VREF，适用于硬件过流保护
+  53   2                  1: 半电压转换模式，DAC输出电压范围为VHALF到VREF
+C51 COMPILER V9.60.7.0   CMPINIT                                                           08/30/2023 13:47:07 PAGE 2   
+
+  54   2              ****************************/
+  55   2              ClrBit(DAC_CR, DACMOD);
+  56   2              /**********设置DAC过流值*****************/
+  57   2              DAC_DR = DAC_OvercurrentValue;
+  58   2          
+  59   2              /**********使能DAC******************/
+  60   2              SetBit(DAC_CR, DACEN );
+  61   2          }
+  62   1          #endif    //end Compare_Mode
+  63   1          SetBit(CMP_CR1, CMP3HYS);                            // 比较器3有迟滞电压
+  64   1          /*  -------------------------------------------------------------------------------------------------
+  65   1              选择母线电流保护触发信号源，外部中断0或者比较器3中断。
+  66   1               1-INT0, 0-CMP3
+  67   1              -------------------------------------------------------------------------------------------------*
+             -/
+  68   1          ClrBit(EVT_FILT, EFSRC);
+  69   1          /*  -------------------------------------------------------------------------------------------------
+  70   1              触发硬件保护后硬件关闭驱动输出MOE配置
+  71   1              00--MOE不自动清零
+  72   1              01--MOE自动清零
+  73   1              -------------------------------------------------------------------------------------------------*
+             -/
+  74   1          SetReg(EVT_FILT, MOEMD0 | MOEMD1, MOEMD0);
+  75   1          /*  -------------------------------------------------------------------------------------------------
+  76   1                母线电流保护时间滤波宽度
+  77   1                00-不滤波    01-4cpu clock    10-8cpu clock    11-16cpu clock
+  78   1              -------------------------------------------------------------------------------------------------*
+             -/
+  79   1          SetReg(EVT_FILT, EFDIV0 | EFDIV1, EFDIV0 | EFDIV1);
+  80   1          /*比较器使能-------------------------------------------------------------------------------------
+             -*/
+  81   1          SetBit(CMP_CR1, CMP3EN);
+  82   1      }
+  83          
+  84          
+  85          void CMP3_Inter_Init(void)
+  86          {
+  87   1          /*  -------------------------------------------------------------------------------------------------
+  88   1              比较器中断模式配置
+  89   1              00: 不产生中断  01: 上升沿产生中断  10: 下降沿产生中断  11: 上升/下降沿产
+             -生中断
+  90   1              -------------------------------------------------------------------------------------------------*
+             -/
+  91   1          ClrBit(CMP_SR, CMP3IF);
+  92   1          SetReg(CMP_CR0, CMP3IM1 | CMP3IM0, CMP3IM0);
+  93   1          PCMP1 = 1;
+  94   1          PCMP0 = 1;                                                               // 中断优先级别3
+  95   1          EA = 1;
+  96   1      }
+  97          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     74    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+C51 COMPILER V9.60.7.0   CMPINIT                                                           08/30/2023 13:47:07 PAGE 3   
+
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

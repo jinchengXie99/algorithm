@@ -1,0 +1,123 @@
+C51 COMPILER V9.60.7.0   EXTIINIT                                                          08/30/2023 13:47:06 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE EXTIINIT
+OBJECT MODULE PLACED IN .\Output\EXTIInit.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Hardware\EXTIInit.c LARGE OMF2 WARNINGLEVEL(0) OPTIMIZE(9
+                    -,SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\EXTIInit.lst) TABS(2) OBJ
+                    -ECT(.\Output\EXTIInit.obj)
+
+line level    source
+
+   1          /*  -------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen ---------------------------*/
+   2          /**
+   3           * @copyright (C) COPYRIGHT 2022 Fortiortech Shenzhen
+   4           * @file      xxx.c
+   5           * @author    Fortiortech  Appliction Team
+   6           * @since     Create:2022-07-14
+   7           * @date      Last modify:2022-07-14
+   8           * @note      Last modify author is Leo.li
+   9           * @brief      
+  10           */
+  11          
+  12          
+  13          /* Includes -------------------------------------------------------------------------------------*/
+  14          #include <FU68xx_2.h>
+  15          #include <Myproject.h>
+  16          
+  17          USER_TYPEDEF        User;
+  18          
+  19          /** 
+  20           * @brief       外部中断配置
+  21           * @data        2022/08/12
+  22           */
+  23          void EXTI_Init(void)
+  24          {
+  25   1          /*EXTI Input Pin 配置 ---------------------------------------- */
+  26   1          ClrBit(P0_OE, P00);  // config P00 as input，配置P0.0为硬件过流FO端口
+  27   1          ClrBit(P0_PU, P00);  // 0:disable pull up, 1:enable P10 pull up
+  28   1          /*  -------------------------------------------------------------------------------------------------
+  29   1              外部中断模式配置
+  30   1              00: 上升沿产生中断  01: 下降沿产生中断  1x: 上升/下降沿产生中断
+  31   1              -------------------------------------------------------------------------------------------------*
+             -/
+  32   1          IF0  = 0;                               // clear P00 interrupt flag
+  33   1          IT01 = 0;
+  34   1          IT00 = 1;                               // 00: rising edge interrupt，01: failing edge interrupt，1x
+             -: edge-change mode interrupt
+  35   1          /*  -------------------------------------------------------------------------------------------------
+  36   1              外部中断优先级配置及芯片中断总使能
+  37   1              PX01-PX00，中断优先级控制值从0-3依次表示优先级从最低到最高，共4级优化�
+             -��控制
+  38   1              EX0，外部中断0使能
+  39   1              EA,芯片中断总使能
+  40   1              外部中断是否有滤波的配置，决定于选择硬件保护触发信号源，外部中断0�
+             -��者比较器3中断。
+  41   1              若选择了比较器3中断，则外部中断无法进行滤波配置
+  42   1              -------------------------------------------------------------------------------------------------*
+             -/
+  43   1          PX01 = 1;
+  44   1          PX00 = 1;                               // 中断优先级别3，中断优先级最高,
+  45   1          EX0 = 1;                                // 使能外部中断0, POO位外部中断输入硬件
+  46   1          EA = 1;                                 // 使能全局中断
+  47   1      }
+  48          
+C51 COMPILER V9.60.7.0   EXTIINIT                                                          08/30/2023 13:47:06 PAGE 2   
+
+  49          /** 
+  50           * @brief       睡眠模式初始化
+  51           * @data        2022/08/12
+  52           */ 
+  53          void Sleepmode_Init(void)
+  54          {
+  55   1          ClrBit(P1_OE, P11);  // config P11 as input
+  56   1          ClrBit(P1_PU, P11);  // diasable P11 Pull Up
+  57   1          // ClrBit(P1_AN, P11);  // diasable P11 analog function
+  58   1          ClrBit(P1_IF, P11);         // clear P11 interrupt flag
+  59   1          ClrBit(P1_IE, P11);   // config P11 as the source of EXTI1
+  60   1          IT11 = 0;
+  61   1          IT10 = 1;                               // 00: posedge mode interrupt，01: negedge mode interrupt，1
+             -x: edge-change mode interrupt
+  62   1          PX11 = 0;
+  63   1          PX10 = 0;                               // 中断优先级别0，中断优先级最高
+  64   1          EX1 = 1;                                // 使能外部中断1, P11位外部中断输入硬件
+  65   1          EA = 1;                                 // 使能全局中断
+  66   1      }
+  67          
+  68          /** 
+  69           * @brief       过零点检测
+  70           * @data        2022/08/12
+  71           */ 
+  72          void ZeroCrossing_Init(void)
+  73          {
+  74   1          ClrBit(P2_OE, P21);  // config P20 as input
+  75   1          ClrBit(P2_PU, P21);  // diasable P20 Pull Up
+  76   1          ClrBit(P2_AN, P21);  // diasable P20 analog function
+  77   1          ClrBit(P2_IF, P21);         // clear P11 interrupt flag
+  78   1          SetBit(P2_IE, P21);   // config P11 as the source of EXTI1
+  79   1          IT11 = 0;
+  80   1          IT10 = 1;                               // 00: posedge mode interrupt，01: negedge mode interrupt，1
+             -x: edge-change mode interrupt
+  81   1          PX11 = 0;
+  82   1          PX10 = 0;                               // 中断优先级别0，中断优先级最高
+  83   1          EX1 = 1;                                // 使能外部中断1, P20位外部中断输入硬件
+  84   1          EA = 1;                                 // 使能全局中断
+  85   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     85    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     13    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

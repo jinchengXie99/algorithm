@@ -1,0 +1,1281 @@
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE ADDFUNCTION
+OBJECT MODULE PLACED IN .\Output\AddFunction.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Application\AddFunction.c LARGE OMF2 WARNINGLEVEL(0) OPTI
+                    -MIZE(9,SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\AddFunction.lst) TA
+                    -BS(2) OBJECT(.\Output\AddFunction.obj)
+
+line level    source
+
+   1          /*  -------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen ---------------------------*/
+   2          /**
+   3           * @copyright (C) COPYRIGHT 2022 Fortiortech Shenzhen
+   4           * @file      xxx.c
+   5           * @author    Fortiortech  Appliction Team
+   6           * @since     Create:2022-07-14
+   7           * @date      Last modify:2022-07-14
+   8           * @note      Last modify author is Leo.li
+   9           * @brief
+  10           */
+  11          
+  12          
+  13          /* Includes -------------------------------------------------------------------------------------*/
+  14          #include <FU68xx_2.h>
+  15          #include <Myproject.h>
+  16          
+  17          OUTLOOP            xdata   SpeedPICtrl;
+  18          FOCCTRL            xdata   mcFocCtrl;
+  19          ONVarible          xdata   ONOFFTest;
+  20          SLEEPMODE          xdata   SleepSet;
+  21          MCRAMP             xdata   mcRefRamp;         ///< 控制指令爬坡结构体相关变量
+  22          MC_CONTROL         xdata     MCCtrl;
+  23          uint8   KeyCount_Up = 0,KeyCount_Dd = 0;
+  24          bit     ONOFF_EN  = 0;
+  25          uint16 Ubusmax = 0;
+  26          uint32 Ubusmaxsum = 0;
+  27          uint16 Ubusmaxavg = 0;
+  28          uint8  Ubusmaxcnt = 0;
+  29          uint8  Ubusmaxsumcnt = 0;
+  30          int8   PWMadapt = 0;
+  31          extern uint8 Spd_looptime;
+  32          /**
+  33              @brief        切入控制闭环时变量初始化赋值
+  34              @date         2022-07-13
+  35          */
+  36          void OutLoopParameterSet(void)
+  37          {
+  38   1          memset(&SpeedPICtrl, 0, sizeof(OUTLOOP));                                                             
+             -  // SpeedControl clear
+  39   1          mcFocCtrl.SpeedLoopTime     = SPEED_LOOP_TIME;
+  40   1          SpeedPICtrl.ExtKP           = SKP;
+  41   1          SpeedPICtrl.ExtKI           = SKI;
+  42   1          SpeedPICtrl.ExtOutMax       = SOUTMAX ;
+  43   1          SpeedPICtrl.ExtOutMin       = SOUTMIN;
+  44   1          PI1_KP       = SpeedPICtrl.ExtKP;
+  45   1          PI1_KI       = SpeedPICtrl.ExtKI;
+  46   1          PI1_UKMAX    = SpeedPICtrl.ExtOutMax;
+  47   1          PI1_UKMIN    = SpeedPICtrl.ExtOutMin;
+  48   1          PI1_UKH      = IQ_RUN_CURRENT;
+  49   1          PI1_EK1      = 500;
+  50   1          PI2_UKH      = PI2_UKMAX;                             //切环输出从最大开始调节
+  51   1      }
+  52          
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 2   
+
+  53          
+  54          /**
+  55              @brief        对变量取16位的绝对值
+  56              @param[in]    value
+  57              @return       绝对值
+  58              @date         2022-07-13
+  59          */
+  60          uint16 Abs_F16(int16 value)
+  61          {
+  62   1          if (value < 0)
+  63   1          {
+  64   2              return (- value);
+  65   2          }
+  66   1          else
+  67   1          {
+  68   2              return (value);
+  69   2          }
+  70   1      }
+  71          
+  72          /**
+  73              @brief        对变量取32位的绝对值
+  74              @param[in]    value
+  75              @return       绝对值
+  76              @date         2022-07-13
+  77          */
+  78          uint32 Abs_F32(int32 value)
+  79          {
+  80   1          if (value < 0)
+  81   1          {
+  82   2              return (- value);
+  83   2          }
+  84   1          else
+  85   1          {
+  86   2              return (value);
+  87   2          }
+  88   1      }
+  89          
+  90          
+  91          /** 
+  92           * @brief        启停测试工具，用于测试启动可靠性
+  93           * @date         2022-07-14 
+  94           */
+  95          void ONOFF_Starttest(void)
+  96          {
+  97   1          if (ONOFFTest.ONOFF_Flag == 1)
+  98   1          {
+  99   2              ONOFFTest.ON_Count++;
+ 100   2              
+ 101   2              if (ONOFFTest.ON_Count > StartON_Time)
+ 102   2              {
+ 103   3                  ONOFFTest.ON_Count = 0;
+ 104   3                  ONOFFTest.ONOFF_Times++;
+ 105   3                  ONOFFTest.ONOFF_Flag = 0;
+ 106   3                  MCCtrl.FlagONOFF = 0;
+ 107   3                  MCCtrl.TargetValue = 0;
+ 108   3              }
+ 109   2          }
+ 110   1          else
+ 111   1          {
+ 112   2              if (mcState != mcFault)
+ 113   2              {
+ 114   3                  ONOFFTest.OFF_Count++;
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 3   
+
+ 115   3                  
+ 116   3                  if (ONOFFTest.OFF_Count > StartOFF_Time)
+ 117   3                  {
+ 118   4                      ONOFFTest.OFF_Count = 0;
+ 119   4                      ONOFFTest.ONOFF_Flag = 1;
+ 120   4                      MCCtrl.FlagONOFF = 1;
+ 121   4      //        MCCtrl.PowerLimitValue = POWERLPFLIMIT;
+ 122   4                      MCCtrl.TargetValue = Motor_Speed_HIgh;
+ 123   4                  }
+ 124   3              }
+ 125   2          }
+ 126   1      }
+ 127          
+ 128          /* -----开关控制启停----- */
+ 129          void Touch_Control(void)
+ 130          {
+ 131   1          static uint8 xdata TouchFltCnt_Cycle = 0, TouchFltCnt_Low = 0, TouchFltCnt_High = 0, TouchFltCnt_L = 0
+             -;
+ 132   1          static uint8 xdata Key_Temp_Oncnt = 0, Key_Temp_Offcnt = 0, Key_Lock_Flag = 0, TouchFltCnt_H = 0;
+ 133   1          
+ 134   1          Keysavevalue = heat_Lv;                 // 掉电温度档位存储
+ 135   1          
+ 136   1          /* -----风筒调速----- */
+ 137   1          TouchFltCnt_Cycle++;    
+ 138   1          if(TouchFltCnt_Cycle > 20)          // 20ms  50Hz
+ 139   1          {
+ 140   2              TouchFltCnt_Cycle = 0;
+ 141   2              /* -----低电平信号比高电平信号多12ms以上----- */
+ 142   2              if(TouchFltCnt_Low > 15)       // TouchFltCnt_Low > 15时
+ 143   2              {                                                   // 全低时，高低电平时间差很大，�
+             -��直为低电平
+ 144   3                  TouchFltCnt_L++;
+ 145   3                  TouchFltCnt_H = 0;
+ 146   3                  if(TouchFltCnt_L >= 10)
+ 147   3                  {
+ 148   4                      TouchFltCnt_L = 0;
+ 149   4                      Speed_Lv = 0;
+ 150   4                      MCCtrl.FlagONOFF   = 1;                         // 启动标记和转速一并给定，电
+             -机启停开关直接控制电源供电，固定给1
+ 151   4                      MCCtrl.TargetValue = Motor_Speed_Low;
+ 152   4                  }
+ 153   3              }
+ 154   2              /* -----TouchFltCnt_Low+TouchFltCnt_High = 20----- */
+ 155   2              else if(TouchFltCnt_High > 7)  // pwm波的高低电平时间差基本一致，可能会有±2的�
+             -��差，这里判断误差±5
+ 156   2              {
+ 157   3                  TouchFltCnt_H++;
+ 158   3                  TouchFltCnt_L = 0;
+ 159   3                  if(TouchFltCnt_H >= 10)
+ 160   3                  {
+ 161   4                      TouchFltCnt_H = 0;
+ 162   4                      Speed_Lv = 1;
+ 163   4                      MCCtrl.FlagONOFF   = 1;                         // 启动标记和转速一并给定
+ 164   4                    MCCtrl.TargetValue = Motor_Speed_HIgh;
+ 165   4      //              if(MCCtrl.TargetValue<Motor_Speed_Low-100)
+ 166   4      //               MCCtrl.TargetValue=Motor_Speed_Low;
+ 167   4      //              else if(MCCtrl.TargetValue<Motor_Speed_HIgh)
+ 168   4      //               MCCtrl.TargetValue=MCCtrl.TargetValue+Motor_Speed_HIgh_INC;
+ 169   4      //              
+ 170   4      //              if (MCCtrl.TargetValue>=Motor_Speed_HIgh)
+ 171   4      //                MCCtrl.TargetValue = Motor_Speed_HIgh;
+ 172   4                    
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 4   
+
+ 173   4                      
+ 174   4                  }
+ 175   3              }
+ 176   2              
+ 177   2              TouchFltCnt_Low  = 0;                               // 一个交流电周期检测一次，清0高
+             -低电平计时
+ 178   2              TouchFltCnt_High = 0;
+ 179   2          }
+ 180   1          else
+ 181   1          {
+ 182   2              if(GP13 == 0)
+ 183   2              {
+ 184   3                  TouchFltCnt_Low++;
+ 185   3              }
+ 186   2              else
+ 187   2              {
+ 188   3                  TouchFltCnt_High++;
+ 189   3              }
+ 190   2          }
+ 191   1              
+ 192   1          /* -----发热丝温度档位----- */
+ 193   1          if(GP14 == 0)
+ 194   1          {
+ 195   2              Key_Temp_Offcnt = 0;
+ 196   2              Key_Temp_Oncnt++;
+ 197   2              if((Key_Temp_Oncnt >= 20) && (Key_Lock_Flag == 0))  // 自锁，防止长按误触发温度调档
+ 198   2              {
+ 199   3                  Key_Temp_Oncnt = 0;
+ 200   3                  Key_Lock_Flag  = 1;
+ 201   3                  heat_Lv++;
+ 202   3                  if(heat_Lv > 3)                 // 发热丝三档，0为冷风
+ 203   3                  {
+ 204   4                      heat_Lv = 1;
+ 205   4                  }
+ 206   3              }
+ 207   2          }
+ 208   1          else
+ 209   1          {
+ 210   2              Key_Temp_Oncnt = 0;
+ 211   2              Key_Temp_Offcnt++;
+ 212   2              if((Key_Temp_Offcnt >= 20) && (Key_Lock_Flag == 1))
+ 213   2              {
+ 214   3                  Key_Temp_Offcnt = 0;
+ 215   3                  Key_Lock_Flag   = 0;            // 确认按键松开一次后，可再次按下调档
+ 216   3              }
+ 217   2          }
+ 218   1      }
+ 219          
+ 220          /** 
+ 221           * @brief        外部闭环控制函数，示例代码提供 电流环，速度环，功率环，UQ控�
+             -�示例代码,可根据需要自行修改
+ 222           *               建议使用默认1ms周期运行
+ 223           * @date         2022-07-14
+ 224           */
+ 225          void Speed_response(void)
+ 226          {    
+ 227   1          /****功率滤波*****/
+ 228   1          if (mcState == mcRun)
+ 229   1          {
+ 230   2              mcFocCtrl.CurrentPower = MUL_X_MDU(mcFocCtrl.mcDcbusFlt, mcFocCtrl.mcIbusFlt);        
+ 231   2      //        mcFocCtrl.CurrentPower = FOC__POW << 4;     // 功率采集寄存器   
+ 232   2              mcFocCtrl.Powerlpf     = LPFFunction(mcFocCtrl.CurrentPower, mcFocCtrl.Powerlpf, 10); //注意低�
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 5   
+
+             -��滤波器系数范围为0---127
+ 233   2          }
+ 234   1          
+ 235   1          /****速度滤波、反电动势滤波*****/
+ 236   1          if ((mcState != mcInit) && (mcState != mcReady))
+ 237   1          {
+ 238   2              mcFocCtrl.SpeedFlt = LPFFunction(FOC__EOME, mcFocCtrl.SpeedFlt, 50); // Q15格式           //注�
+             -��低通滤波器系数范围为0---127
+ 239   2              mcFocCtrl.EsValue  = LPFFunction(FOC__EMF, mcFocCtrl.EsValue, 10);      // 堵转保护
+ 240   2          }
+ 241   1          else
+ 242   1          {
+ 243   2              mcFocCtrl.SpeedFlt = 0;
+ 244   2          }
+ 245   1          
+ 246   1          /****UQ电压值滤波****/
+ 247   1          mcFocCtrl.UqFlt = LPFFunction(FOC__UQ, mcFocCtrl.UqFlt, 10);    // -32768~32767                    // 
+             -UQ值
+ 248   1          mcFocCtrl.UdFlt = LPFFunction(FOC__UD, mcFocCtrl.UdFlt, 10);                        // UD值
+ 249   1          
+ 250   1          if ((mcState == mcRun) || (mcState == mcStop))
+ 251   1          {
+ 252   2              switch (mcFocCtrl.CtrlMode)
+ 253   2              {
+ 254   3                  case 0:
+ 255   3                  {
+ 256   4                      #if (START_MODE == Observer_Start)
+                              if ((FOC__EOME > Motor_Loop_Speed) && (LowSpeedObserver.state == 3))
+                              #else
+ 259   4                      if (mcFocCtrl.SpeedFlt > Motor_Loop_Speed)
+ 260   4                      #endif
+ 261   4                      {
+ 262   5                          FOC_THECOR     = 0x04;
+ 263   5                          FOC_IDREF      = ID_RUN_CURRENT;
+ 264   5                          mcFocCtrl.CtrlMode = 1;
+ 265   5                          FOC_DQKP = DQKP;
+ 266   5                          FOC_DQKI = DQKI;
+ 267   5                          # if (Motor_Speed_Control_Mode == SPEED_LOOP_CONTROL)
+ 268   5                          {
+ 269   6                              mcRefRamp.OutValue_float = mcFocCtrl.SpeedFlt;  //防止mcSpeedRamp.ActualValue从
+             -0开始爬坡，造成估算异常，电流异常
+ 270   6                          }
+ 271   5                          #elif (Motor_Speed_Control_Mode == POWER_LOOP_CONTROL)
+                                  {
+                                      mcRefRamp.OutValue_float = mcFocCtrl.Powerlpf;
+                                  }
+                                  #endif
+ 276   5                          mcRefRamp.IncValue     = SPEEDRAMPINC;                     //运行速度环增量
+ 277   5                          mcRefRamp.DecValue     = SPEEDRAMPDEC;
+ 278   5                          OutLoopParameterSet();       //环路基本参数设置
+ 279   5                      }
+ 280   4                      else
+ 281   4                      {
+ 282   5                          if (FOC_IQREF < IQ_RUN_CURRENT)
+ 283   5                          {
+ 284   6                              FOC_IQREF += 3;
+ 285   6                          }
+ 286   5                      }
+ 287   4                  }
+ 288   3                  break;
+ 289   3                  
+ 290   3                  case 1:
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 6   
+
+ 291   3                  {
+ 292   4                      mcFocCtrl.SpeedLoopTime++;
+ 293   4                      
+ 294   4                      if (mcFocCtrl.SpeedLoopTime >= SPEED_LOOP_TIME) //外环调节周期
+ 295   4                      {
+ 296   5                          MCCtrl.ActualValue = Motor_Ramp(MCCtrl.TargetValue);                     //爬坡增�
+             -�调节
+ 297   5                          mcFocCtrl.SpeedLoopTime = 0;
+ 298   5                          
+ 299   5                          #if (F7_F5_ENABLE)
+ 300   5                          {
+ 301   6                              if (mcFocCtrl.SpeedFlt > F7_F5_Speed)
+ 302   6                              {
+ 303   7                                  SetBit(FOC_CR2, F5SEG);
+ 304   7                              }
+ 305   6                          }
+ 306   5                          #endif
+ 307   5                          
+ 308   5                          #if (Motor_Speed_Control_Mode == SPEED_LOOP_CONTROL)
+ 309   5                          {
+ 310   6                              SpeedPICtrl.ExtEK =  MCCtrl.ActualValue - mcFocCtrl.SpeedFlt;
+ 311   6                              SpeedPICtrl.ExtOut = HW_One_PI(SpeedPICtrl.ExtEK);                    //速度环�
+             -��节               
+ 312   6                              FOC_IQREF = SpeedPICtrl.ExtOut;
+ 313   6                              
+ 314   6                              // FOC__UQ 能够输出的最大值   30000   FOC_QMAX = 20000  
+ 315   6      //                        FOC_QMAX = HW_One_PI2(MCCtrl.PowerLimitValue - mcFocCtrl.Powerlpf);   //限制�
+             -�率
+ 316   6      //                        SpeedPICtrl.ExtOut_Limit = HW_One_PI2(MCCtrl.PowerLimitValue - mcFocCtrl.Powerlp
+             -f);
+ 317   6                          }
+ 318   5                          #elif (Motor_Speed_Control_Mode == POWER_LOOP_CONTROL)
+                                  {
+                                      FOC_IQREF = HW_One_PI(MCCtrl.ActualValue - mcFocCtrl.Powerlpf);
+                                  }
+                                  #endif
+ 323   5                      }
+ 324   4                  }
+ 325   3                  break;
+ 326   3              }
+ 327   2          }
+ 328   1      }
+ 329          
+ 330          /**
+ 331           * @brief        控制给定爬坡函数
+ 332           *               以浮点进行计算，解决整数爬坡由于精度的影响，导致爬坡结果阶�
+             -�变化
+ 333           *               函数控制周期默认为闭环控制周期，建议使用默认1ms周期运行
+ 334           * @param[in]    ref 给定目标值
+ 335           * @return       爬坡结果（int16）
+ 336           * @date         2022-07-14
+ 337           */
+ 338          int16 Motor_Ramp(int16 ref)
+ 339          {
+ 340   1          mcRefRamp.RefValue = ref;             // 爬坡函数输入
+ 341   1          
+ 342   1          if (mcRefRamp.OutValue_float < mcRefRamp.RefValue)
+ 343   1          {
+ 344   2              if (mcRefRamp.OutValue_float + mcRefRamp.IncValue < mcRefRamp.RefValue)
+ 345   2              {
+ 346   3                  mcRefRamp.OutValue_float += mcRefRamp.IncValue;
+ 347   3              }
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 7   
+
+ 348   2              else
+ 349   2              {
+ 350   3                  mcRefRamp.OutValue_float = mcRefRamp.RefValue;
+ 351   3              }
+ 352   2          }
+ 353   1          else
+ 354   1          {
+ 355   2              if (mcRefRamp.OutValue_float - mcRefRamp.DecValue > mcRefRamp.RefValue)
+ 356   2              {
+ 357   3                  mcRefRamp.OutValue_float -= mcRefRamp.DecValue;
+ 358   3              }
+ 359   2              else
+ 360   2              {
+ 361   3                  mcRefRamp.OutValue_float = mcRefRamp.RefValue;
+ 362   3              }
+ 363   2          }
+ 364   1          
+ 365   1          return (int16)mcRefRamp.OutValue_float;   // 输出浮点数取整
+ 366   1      }
+ 367          
+ 368          
+ 369          /*---------------------------------------------------------------------------*/
+ 370          /*  Name     :   void Sleepmode(void)
+ 371              /* Input    :   NO
+ 372              /* Output   :   NO
+ 373              /* Description: 睡眠模式测试
+ 374              /*---------------------------------------------------------------------------*/
+ 375          void Sleepmode(void)
+ 376          {
+ 377   1          SleepSet.SleepDelayCout++;
+ 378   1          
+ 379   1          if (SleepSet.SleepDelayCout >= 20000) //最大65530，若要再大，需改数据类型
+ 380   1          {
+ 381   2              //        mcSpeedRamp.TargetValue = 0;
+ 382   2              //        MOE     = 0;
+ 383   2              //        ClrBit(DRV_CR, FOCEN);  //关闭FOC
+ 384   2              //        SleepSet.SleepDelayCout = 0;
+ 385   2              //        SleepSet.SleepFlag = 1;
+ 386   2              //        SetBit(P1_IE, P11);   // config P11 as the source of EXTI1
+ 387   2              //        SetBit(PCON, STOP);
+ 388   2          }
+ 389   1      }
+ 390          /*---------------------------------------------------------------------------*/
+ 391          /*  Name     :   void StarRampDealwith(void)
+ 392              /* Input    :   NO
+ 393              /* Output   :   NO
+ 394              /* Description:
+ 395              /*---------------------------------------------------------------------------*/
+ 396          void StarRampDealwith(void)
+ 397          {
+ 398   1          if (mcState == mcRun)
+ 399   1          {
+ 400   2              if(mcFocCtrl.State_Count >= 70)
+ 401   2              {
+ 402   3                  ;
+ 403   3              }
+ 404   2              else if (mcFocCtrl.State_Count >= 50) //2300
+ 405   2              {
+ 406   3                  ClrBit(FOC_CR2, UQD);
+ 407   3                  FOC_EKP = OBSW_KP_GAIN_RUN;                           // 估算器里的PI的KP
+ 408   3                  FOC_EKI = OBSW_KI_GAIN_RUN;                                 // 估算器里的PI的KI
+ 409   3              }
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 8   
+
+ 410   2              else if (mcFocCtrl.State_Count >= 30) //2000
+ 411   2              {
+ 412   3                  FOC_EKP = OBSW_KP_GAIN_RUN1;                            // 估算器里的PI的KP
+ 413   3                  FOC_EKI = OBSW_KI_GAIN_RUN1;                                  // 估算器里的PI的KI
+ 414   3              }
+ 415   2              else if (mcFocCtrl.State_Count >= 10) //1600
+ 416   2              {
+ 417   3                  FOC_EKP = OBSW_KP_GAIN_RUN2;                            // 估算器里的PI的KP
+ 418   3                  FOC_EKI = OBSW_KI_GAIN_RUN2;                                  // 估算器里的PI的KI
+ 419   3              }
+ 420   2              else    // if (mcFocCtrl.State_Count == 10) //1600
+ 421   2              {
+ 422   3                  FOC_EKP = OBSW_KP_GAIN_RUN3;                            // 估算器里的PI的KP
+ 423   3                  FOC_EKI = OBSW_KI_GAIN_RUN3;                                  // 估算器里的PI的KI
+ 424   3              }
+ 425   2      //        else;
+ 426   2          }
+ 427   1      }
+ 428          
+ 429          /** 
+ 430           * @brief        调速信号处理包含：开关机控制、将调速信号处理成控制目标给定�
+             -�号
+ 431           * @date         2022-07-14  
+ 432           */
+ 433          void TargetSpeed_Colletion(void)
+ 434          {
+ 435   1          #if (SPEED_MODE == ONOFFTEST)       // 上电启停，跑老化，测试启动成功率
+                  {
+                      ONOFF_Starttest();
+                  }
+                  #elif (SPEED_MODE == KEYSCANMODE)
+                  {
+                      MCCtrl.FlagONOFF = 1;
+                  
+              //      KeyScan();                                                            //获取按键值
+                      Key_Led_Ctrl();
+                      KEY_LED_Display();
+                      
+                      
+                  }
+                  #elif (SPEED_MODE == TOUCHMODE)
+ 450   1          {
+ 451   2              /* -----启停开关、温度档位按键处理----- */
+ 452   2              Touch_Control();
+ 453   2              
+ 454   2              /* -----LED灯显----- */
+ 455   2              LED_Display();
+ 456   2              
+ 457   2              /* -----发热丝相关处理----- */
+ 458   2              HEATER_CONTROL();
+ 459   2          }
+ 460   1          #else
+                  {
+                      MCCtrl.TargetValue = Motor_Speed_Low;         // 转速赋值
+                      MCCtrl.FlagONOFF   = 1;
+                  }
+                  #endif
+ 466   1              
+ 467   1          #if (FREnable == 1)
+                  {
+                      FRControl();
+                  }
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 9   
+
+                  #endif
+ 472   1      }
+ 473          
+ 474          
+ 475          /** 
+ 476           * @brief        FR控制逻辑，反转存在时间控制，不会一直反转
+ 477           * @date         2022-07-14  
+ 478           */
+ 479          void  FRControl(void)
+ 480          {
+ 481   1          static uint16 CWCCWDelay = 0;
+ 482   1          
+ 483   1          if ((FRPin != MCCtrl.FR_Status) && (MCCtrl.FlagFR == 0)) //CCW
+ 484   1          {
+ 485   2              if (CWCCWDelay ++ == 500)
+ 486   2              {
+ 487   3                  CWCCWDelay = 0;
+ 488   3                  MCCtrl.FlagFR = 1;
+ 489   3                  MCCtrl.FR_Status = FRPin;
+ 490   3              }
+ 491   2          }
+ 492   1          
+ 493   1          if (MCCtrl.FlagFR)
+ 494   1          {
+ 495   2              MCCtrl.FlagONOFF = 0;
+ 496   2          }
+ 497   1      }
+ 498          
+ 499          
+ 500          /**
+ 501           * @brief        默认1ms周期服务函数，运行信号采样，调速信号处理，闭环控制，�
+             -�障检测,ATO爬坡函数
+ 502           *               该函数运行于大循环中，由SYSTICK定时器间隔1ms触发运行。
+ 503           * @date         2022-07-14
+ 504           */
+ 505          uint16  a123cnt = 0;
+ 506          void TickCycle_1ms(void)
+ 507          {
+ 508   1          uint16 Temperature = 0;
+ 509   1        
+ 510   1          /* **********温度采集********** */
+ 511   1          Temperature      = ADC6_DR << 3;                   // mos温度采集
+ 512   1          User.Temperature = LPFFunction(Temperature, User.Temperature, 30);   // 0-128
+ 513   1        
+ 514   1          /* -----发热丝温度采集----- */
+ 515   1          HeatTmp_ADvalue_sum += (ADC7_DR );   // 数据放大，提高精度<< 3
+ 516   1          
+ 517   1          HeatTmp_sum_cnt++;
+ 518   1          if(HeatTmp_sum_cnt >= 10)                // 获取10次发热丝温度求平均值
+ 519   1          {
+ 520   2              HeatTmp_ADvalue_avg = (uint16)((HeatTmp_ADvalue_sum >> 1) / 5);   // 用于温度补正控制和�
+             -�热丝过温保护
+ 521   2              HeatTmp_ADvalue_sum = 0;
+ 522   2              HeatTmp_sum_cnt = 0;
+ 523   2          }
+ 524   1          
+ 525   1          /*****DCbus的采样获取值并滤波******/
+ 526   1          mcFocCtrl.mcDcbusFlt = ADC2_DR << 3;
+ 527   1          mcFocCtrl.mcIbusFlt  = LPFFunction(ADC11_DR << 3, mcFocCtrl.mcIbusFlt, 10);
+ 528   1        
+ 529   1          /***********获取母线电压最高值以判断交流电压的高低***********/  // 保留，待实�
+             -��测试看那种效果好
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 10  
+
+ 530   1          if(mcFocCtrl.mcDcbusFlt > Ubusmax)
+ 531   1          {
+ 532   2              Ubusmax = mcFocCtrl.mcDcbusFlt;
+ 533   2          }
+ 534   1          
+ 535   1          if(++Ubusmaxcnt > 15)
+ 536   1          {
+ 537   2              Ubusmaxcnt = 0;
+ 538   2              Ubusmaxsum += Ubusmax;
+ 539   2              if(++Ubusmaxsumcnt >= 16)
+ 540   2              {
+ 541   3                  Ubusmaxavg = Ubusmaxsum >> 4;
+ 542   3                  Ubusmaxsum = 0;
+ 543   3                  Ubusmaxsumcnt = 0;
+ 544   3      
+ 545   3                
+ 546   3                
+ 547   3                
+ 548   3                  if(Ubusmaxavg > 25000)
+ 549   3                  {
+ 550   4                      PWMadapt = -33;
+ 551   4                    
+ 552   4                  }
+ 553   3                  else if(Ubusmaxavg > 24500)   //250
+ 554   3                  {
+ 555   4                    if(Ubusmaxavg >24900)
+ 556   4                      PWMadapt = -32;
+ 557   4                    else  if(Ubusmaxavg >24800)
+ 558   4                      PWMadapt = -31;
+ 559   4                    else  if(Ubusmaxavg >24700)
+ 560   4                      PWMadapt = -30;
+ 561   4                    else  if(Ubusmaxavg >24600)
+ 562   4                      PWMadapt = -29;
+ 563   4                    else  
+ 564   4                      PWMadapt = -28;   
+ 565   4                  }
+ 566   3                  else if(Ubusmaxavg > 24000)   //245
+ 567   3                  {
+ 568   4                    if(Ubusmaxavg >24400)
+ 569   4                      PWMadapt = -27;
+ 570   4                    else  if(Ubusmaxavg >24300)
+ 571   4                      PWMadapt = -26;
+ 572   4                    else  if(Ubusmaxavg >24200)
+ 573   4                      PWMadapt = -25;
+ 574   4                    else  if(Ubusmaxavg >24100)
+ 575   4                      PWMadapt = -24;
+ 576   4                    else              
+ 577   4                      PWMadapt = -23;
+ 578   4                  }
+ 579   3                  else if(Ubusmaxavg > 23500) //240
+ 580   3                  {
+ 581   4                    if(Ubusmaxavg >23900)
+ 582   4                      PWMadapt = -22;
+ 583   4                    else  if(Ubusmaxavg >23800)
+ 584   4                      PWMadapt = -21;
+ 585   4                    else  if(Ubusmaxavg >23700)
+ 586   4                      PWMadapt = -20;
+ 587   4                    else  if(Ubusmaxavg >23600)
+ 588   4                      PWMadapt = -19;
+ 589   4                    else              
+ 590   4                      PWMadapt = -18;
+ 591   4                  
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 11  
+
+ 592   4                  }
+ 593   3                  else if(Ubusmaxavg > 23000)  //235
+ 594   3                  {
+ 595   4                    if(Ubusmaxavg >23400)
+ 596   4                      PWMadapt = -18;
+ 597   4                    else  if(Ubusmaxavg >23300)
+ 598   4                      PWMadapt = -17;
+ 599   4                    else  if(Ubusmaxavg >23200)
+ 600   4                      PWMadapt = -16;
+ 601   4                    else  if(Ubusmaxavg >23100)
+ 602   4                      PWMadapt = -16;
+ 603   4                    else              
+ 604   4                      PWMadapt = -15;
+ 605   4      
+ 606   4                  }
+ 607   3                  else if(Ubusmaxavg > 22500)    //230
+ 608   3                  {
+ 609   4                      PWMadapt = -14;     //230
+ 610   4                  }
+ 611   3                  else if(Ubusmaxavg > 22000)
+ 612   3                  {
+ 613   4                    if(Ubusmaxavg >22400)
+ 614   4                      PWMadapt = -13;
+ 615   4                    else  if(Ubusmaxavg >22300)
+ 616   4                      PWMadapt = -12;
+ 617   4                    else  if(Ubusmaxavg >22200)
+ 618   4                      PWMadapt = -11;
+ 619   4                    else  if(Ubusmaxavg >22100)
+ 620   4                      PWMadapt = -9;
+ 621   4                    else              
+ 622   4                      PWMadapt = -8;
+ 623   4                    
+ 624   4                              
+ 625   4                  }
+ 626   3                  else if(Ubusmaxavg > 21500)
+ 627   3                  {
+ 628   4                    if(Ubusmaxavg >21900)
+ 629   4                      PWMadapt = -7;
+ 630   4                    else  if(Ubusmaxavg >21800)
+ 631   4                      PWMadapt = -5;
+ 632   4                    else  if(Ubusmaxavg >21700)
+ 633   4                      PWMadapt = -3;
+ 634   4                    else  if(Ubusmaxavg >21600)
+ 635   4                      PWMadapt = -2;
+ 636   4                    else              
+ 637   4                      PWMadapt = 0;
+ 638   4                  }
+ 639   3      //            else if (Ubusmaxavg > 21500)
+ 640   3                  else if(Ubusmaxavg > 21000)
+ 641   3                 {
+ 642   4                      PWMadapt = 1;  //220
+ 643   4                 }
+ 644   3                 else if(Ubusmaxavg > 20500)
+ 645   3                 {
+ 646   4                   
+ 647   4                   if(Ubusmaxavg >20700)
+ 648   4                      PWMadapt = 2;
+ 649   4                   else 
+ 650   4                   
+ 651   4                      PWMadapt = 3;  //220
+ 652   4                 }
+ 653   3                  else PWMadapt = 3;
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 12  
+
+ 654   3                  
+ 655   3                  
+ 656   3      //            if(Ubusmaxavg >=21300)
+ 657   3      //            {
+ 658   3      ////                PWMadapt = -(Ubusmaxavg-21000)*0.01;  //220
+ 659   3      //              a123cnt=-(Ubusmaxavg-21000);
+ 660   3      //            }
+ 661   3      //            else 
+ 662   3      //            {
+ 663   3      //              
+ 664   3      //              
+ 665   3      //              
+ 666   3      //                PWMadapt = 3;  //220
+ 667   3      //            }
+ 668   3      
+ 669   3      
+ 670   3      
+ 671   3      
+ 672   3      
+ 673   3      
+ 674   3      
+ 675   3      
+ 676   3      
+ 677   3                  
+ 678   3                  
+ 679   3              }
+ 680   2            
+ 681   2              Ubusmax = 0;
+ 682   2          }
+ 683   1          
+ 684   1          /* **********按键采集********** */
+ 685   1      //    Key_ADvalue_avg = ADC10_DR;
+ 686   1        
+ 687   1          /* -----环路响应，如速度环、转矩环、功率环等----- */
+ 688   1          Speed_response();
+ 689   1        
+ 690   1          /*****故障保护函数功能，如过欠压保护、启动保护、缺相、堵转等********/
+ 691   1          Fault_Detection();
+ 692   1        
+ 693   1          /*****电机启动爬坡函数处理*****/
+ 694   1          StarRampDealwith();
+ 695   1        
+ 696   1          /*****获取调速信号，不同调速模式(PWMMODE,NONEMODE,SREFMODE,KEYSCANMODE)的目标值修改
+             -******/
+ 697   1          TargetSpeed_Colletion();
+ 698   1        
+ 699   1          
+ 700   1      //     MCCtrl.FlagONOFF       = 1;
+ 701   1      //     MCCtrl.TargetValue     = Motor_Speed_Low;
+ 702   1        
+ 703   1          #if (SPEED_MODE == KEYSCANMODE)
+                  
+                  /*****LED显示******/
+              //    if (KS.ChangeKeyFlg)                                                  //更新LED显示
+              //    {
+              //        LEDControl();
+              //        KS.ChangeKeyFlg = 0;
+              //    }
+                  
+                  #endif
+ 713   1          
+ 714   1      //    if(++RuntimeCntX1ms >= 60000)
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 13  
+
+ 715   1      //    {
+ 716   1      //        RuntimeCntX1ms = 0;
+ 717   1      //        if(++RuntimeCntX1min >= 255)    // min计时
+ 718   1      //        {
+ 719   1      //            RuntimeCntXn++;
+ 720   1      //        }
+ 721   1      //    }
+ 722   1          
+ 723   1      //    if (( mcState == mcRun ) && (User.TPCtrlDealy > 0))
+ 724   1      //    {
+ 725   1      //        User.TPCtrlDealy--;
+ 726   1      //    }
+ 727   1          
+ 728   1          #if (TailWind_Mode == TailWind)
+                  {
+                      #if (FRDetectMethod==FOCMethod)
+                      {
+                          FOCTailWindTimeLimit();
+                      }
+                      #else
+                      {
+                          if (BEMFDetect.BEMFTimeCount > 0)
+                          {
+                              BEMFDetect.BEMFTimeCount--;
+                          }
+                      }
+                      #endif
+                  }
+                  #endif
+ 744   1      }
+ 745          
+ 746           uint8  Heaterrflag1=0 ;
+ 747           uint16 Heaterrcnt1 =0;
+ 748          
+ 749           uint16 Heat_duty_act_inc1=0;
+ 750           uint16 Heat_duty_act_inc2=0;
+ 751           uint8  cntinc=0 ;
+ 752          void HEATER_CONTROL(void)
+ 753          {
+ 754   1          if(mcState == mcRun)                    // 发热丝仅在电机运行中输出
+ 755   1          {
+ 756   2              if(Heat_on_delay < 1200)    // 风筒运行1200ms后开发热丝输出
+ 757   2              {
+ 758   3                  Heat_on_delay++;
+ 759   3                  TmpPwmdelta = 0;
+ 760   3                  Tmpregularcnt = 0;
+ 761   3                  Getzero_flag = 0;
+ 762   3                  Secoff_flag = 0;
+ 763   3                  Secoffcnt = 0;
+ 764   3              }
+ 765   2              else
+ 766   2              {
+ 767   3                  switch (heat_Lv)                // 根据温度档位给定发热丝输出duty和恒温温度
+ 768   3                  {
+ 769   4                      case 1:                     // 冷风档，不开输出
+ 770   4                      {
+ 771   5                          Cool_Lv = 1;            // 冷风档标记
+ 772   5                      }
+ 773   4                      break;
+ 774   4                      
+ 775   4                      case 2:
+ 776   4                      {
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 14  
+
+ 777   5                          Cool_Lv = 0;
+ 778   5                          switch (Speed_Lv)   // 不同转速维持温度需要相应改变发热丝输出duty�
+             -�
+ 779   5                          {
+ 780   6                              case 0:         // 整个输出周期，分三段，每一段160ms
+ 781   6                              {
+ 782   7                                  Heat_duty     = HEAT_PWM_LV1_1;         // 发热丝固定输出duty，总周�
+             -��48个过零点
+ 783   7                                  WindTemperCmd = TMPVALUECMD_LV1_1;      // 设定出风口目标温度，用�
+             -�功率补正
+ 784   7                              }
+ 785   6                              break;
+ 786   6                              
+ 787   6                              case 1:     // 同样的发热丝输出duty在不同风速下，出风口温度不
+             -同，高风速时需要加大输出duty
+ 788   6                              {
+ 789   7                                  Heat_duty     = HEAT_PWM_LV1_3;         // 发热丝输出duty  480ms   230ms
+ 790   7                                  WindTemperCmd = TMPVALUECMD_LV1_3;      // WindTemperCmd 出风口目标温度
+             -，用于温度补正
+ 791   7                              }
+ 792   6                              break;
+ 793   6                          }
+ 794   5                      }
+ 795   4                      break;
+ 796   4                      
+ 797   4                      case 3:
+ 798   4                      {
+ 799   5                          Cool_Lv = 0;
+ 800   5                          switch (Speed_Lv)   // 不同转速维持温度需要相应改变发热丝开关
+ 801   5                          {
+ 802   6                              case 0:
+ 803   6                              {
+ 804   7                                  Heat_duty     = HEAT_PWM_LV3_1;
+ 805   7                                  WindTemperCmd = TMPVALUECMD_LV3_1;
+ 806   7                              }
+ 807   6                              break;
+ 808   6                              
+ 809   6                              case 1:
+ 810   6                              {
+ 811   7                                  Heat_duty     = HEAT_PWM_LV3_3;
+ 812   7                                  WindTemperCmd = TMPVALUECMD_LV3_3;
+ 813   7                              }
+ 814   6                              break;
+ 815   6                          }
+ 816   5                      }
+ 817   4                      break;
+ 818   4                      
+ 819   4                      default:
+ 820   4                      {
+ 821   5                          ;
+ 822   5                      }
+ 823   4                      break;
+ 824   4                  }
+ 825   3                  
+ 826   3                    if( (HeatTmp_ADvalue_avg >= 4080) || (HeatTmp_ADvalue_avg <= 150) )
+ 827   3                    {
+ 828   4                      if(++Heaterrcnt1 >= 500)
+ 829   4                      {
+ 830   5                        Heaterrcnt1 = 500;
+ 831   5                        Heaterrflag1 = 1;
+ 832   5                      }
+ 833   4                    }
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 15  
+
+ 834   3                    else
+ 835   3                    {
+ 836   4                      Heaterrcnt1 = 0;
+ 837   4                      Heaterrflag1 = 0;
+ 838   4                    }
+ 839   3                  
+ 840   3                  
+ 841   3                  
+ 842   3                  
+ 843   3                  
+ 844   3                  
+ 845   3                  if((Cool_Lv == 0) && (Overtmp_flag == 0) && (OverVoltageflag == 0)&&(Heaterrflag1==0))//
+ 846   3                  {
+ 847   4                      /* 误差补正 */
+ 848   4                      Tmpregularcnt++;
+ 849   4                  if(Tmpregularcnt > 1000)          // 每10ms执行一次
+ 850   4                      {
+ 851   5                          Tmpregularcnt = 0;
+ 852   5                          cntinc++;
+ 853   5                         if(cntinc>3)
+ 854   5                           cntinc=0;
+ 855   5                          /***************************************
+ 856   5                            NTC温度计算
+ 857   5                          ***************************************/
+ 858   5                          if(HeatTmp_ADvalue_avg <= CELSIUS_P25_ADC_B)
+ 859   5                          {
+ 860   6                               // <50℃
+ 861   6                               if(HeatTmp_ADvalue_avg > CELSIUS_P50_ADC_B)
+ 862   6                                 HeatTmp_real = CalTemperOffset(50,HeatTmp_ADvalue_avg,CELSIUS_P50_ADC_B,CELSIUS
+             -_P25_ADC_B);
+ 863   6                               // <75℃
+ 864   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P75_ADC_B)
+ 865   6                                 HeatTmp_real = CalTemperOffset(75,HeatTmp_ADvalue_avg,CELSIUS_P75_ADC_B,CELSIUS
+             -_P50_ADC_B);
+ 866   6                               // <100℃
+ 867   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P100_ADC_B)
+ 868   6                                 HeatTmp_real = CalTemperOffset(100,HeatTmp_ADvalue_avg,CELSIUS_P100_ADC_B,CELSI
+             -US_P75_ADC_B);
+ 869   6                               // <125℃
+ 870   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P125_ADC_B)
+ 871   6                                 HeatTmp_real = CalTemperOffset(125,HeatTmp_ADvalue_avg,CELSIUS_P125_ADC_B,CELSI
+             -US_P100_ADC_B);
+ 872   6                               // >125℃
+ 873   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P150_ADC_B)
+ 874   6                                 HeatTmp_real = CalTemperOffset(150,HeatTmp_ADvalue_avg,CELSIUS_P150_ADC_B,CELSI
+             -US_P125_ADC_B);
+ 875   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P170_ADC_B)
+ 876   6                                 HeatTmp_real = CalTemperOffset(170,HeatTmp_ADvalue_avg,CELSIUS_P170_ADC_B,CELSI
+             -US_P150_ADC_B);
+ 877   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P190_ADC_B)
+ 878   6                                   HeatTmp_real = CalTemperOffset(190,HeatTmp_ADvalue_avg,CELSIUS_P190_ADC_B,CEL
+             -SIUS_P170_ADC_B);
+ 879   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P210_ADC_B)
+ 880   6                                   HeatTmp_real = CalTemperOffset(210,HeatTmp_ADvalue_avg,CELSIUS_P210_ADC_B,CEL
+             -SIUS_P190_ADC_B);
+ 881   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P230_ADC_B)
+ 882   6                                   HeatTmp_real = CalTemperOffset(230,HeatTmp_ADvalue_avg,CELSIUS_P230_ADC_B,CEL
+             -SIUS_P210_ADC_B);
+ 883   6                               else if(HeatTmp_ADvalue_avg > CELSIUS_P250_ADC_B)
+ 884   6                                   HeatTmp_real = CalTemperOffset(250,HeatTmp_ADvalue_avg,CELSIUS_P250_ADC_B,CEL
+             -SIUS_P230_ADC_B);
+ 885   6                               else
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 16  
+
+ 886   6                                  HeatTmp_real = 250;
+ 887   6                          }
+ 888   5                        // <25℃
+ 889   5                          else
+ 890   5                          {
+ 891   6                              HeatTmp_real = 25;
+ 892   6                          }
+ 893   5                          
+ 894   5                          /* 温度误差补正 */
+ 895   5                          if(heat_Lv != 0)
+ 896   5                          {
+ 897   6                              HeatTmp_old = HeatTmp_new;
+ 898   6                              HeatTmp_new = HeatTmp_real;
+ 899   6                              if(HeatTmp_new > HeatTmp_old)      
+ 900   6                              {
+ 901   7                                  HeatTmp_updowmLv = HEATUP;
+ 902   7                              }
+ 903   6                              else if(HeatTmp_new < HeatTmp_old) 
+ 904   6                              {
+ 905   7                                  HeatTmp_updowmLv = HEATDOWN;
+ 906   7                              }
+ 907   6                              else
+ 908   6                              {
+ 909   7                                  HeatTmp_updowmLv = HEATHOLDON;
+ 910   7                              }
+ 911   6                              
+ 912   6                                if((Speed_Lv==1)&&(heat_Lv==3))
+ 913   6                                {
+ 914   7                                
+ 915   7                                    if(HeatTmp_real < WindTemperCmd)      
+ 916   7                                    {
+ 917   8            //                          if(HeatTmp_updowmLv != HEATUP)   
+ 918   8            //                          {
+ 919   8            //                            if(WindTemperCmd - HeatTmp_real >= 12)
+ 920   8            //                            {
+ 921   8            //                              TmpPwmdelta += 10;
+ 922   8            //                            }
+ 923   8            //                            else
+ 924   8            //                            {
+ 925   8            //                              TmpPwmdelta=TmpPwmdelta+2;
+ 926   8            //                            }
+ 927   8            //                          }
+ 928   8            //                          if(WindTemperCmd - HeatTmp_real >= 12)
+ 929   8            //                            {
+ 930   8            //                              TmpPwmdelta = 10;
+ 931   8            //                            }
+ 932   8            //                          else 
+ 933   8                                        if(WindTemperCmd - HeatTmp_real >= 5)
+ 934   8                                        {
+ 935   9                                          TmpPwmdelta = 2;
+ 936   9                                        }
+ 937   8                                      else if(WindTemperCmd - HeatTmp_real >= 2)
+ 938   8                                        {
+ 939   9                                          if(cntinc==3)
+ 940   9                                          TmpPwmdelta = 1;
+ 941   9                                        }
+ 942   8                                      else 
+ 943   8                                        {
+ 944   9                                          TmpPwmdelta = 0;
+ 945   9                                        }
+ 946   8                                      
+ 947   8                                      
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 17  
+
+ 948   8                                    }
+ 949   7                                    else if(HeatTmp_real > WindTemperCmd)
+ 950   7                                    {
+ 951   8            //                          if(HeatTmp_updowmLv != HEATDOWN)
+ 952   8            //                          {
+ 953   8            //                            if(HeatTmp_real - WindTemperCmd >= 12)
+ 954   8            //                            {
+ 955   8            //                              TmpPwmdelta -= 10;
+ 956   8            //                            }
+ 957   8            //                            else
+ 958   8            //                            {
+ 959   8            //                              TmpPwmdelta=TmpPwmdelta-2;
+ 960   8            //                            }
+ 961   8            //                          }
+ 962   8                                      
+ 963   8            //                          if(HeatTmp_real - WindTemperCmd >= 20)
+ 964   8            //                            {
+ 965   8            //                              TmpPwmdelta = -10;
+ 966   8            //                            }
+ 967   8            //                          else
+ 968   8                                      
+ 969   8                                      
+ 970   8                                      
+ 971   8                                      
+ 972   8                                      
+ 973   8                                      
+ 974   8                                      
+ 975   8                                        if(HeatTmp_real - WindTemperCmd >= 5)
+ 976   8                                        {
+ 977   9                                          TmpPwmdelta = -2;
+ 978   9                                        }
+ 979   8                                      else if(HeatTmp_real - WindTemperCmd >= 2)
+ 980   8                                        {
+ 981   9                                          if(cntinc==3)
+ 982   9                                          TmpPwmdelta = -1;
+ 983   9                                        }
+ 984   8                                      else 
+ 985   8                                        {
+ 986   9                                          TmpPwmdelta = 0;
+ 987   9                                        } 
+ 988   8                                        
+ 989   8                                    
+ 990   8                                     }
+ 991   7                                
+ 992   7                                    
+ 993   7                                    else 
+ 994   7                                    {
+ 995   8                                      TmpPwmdelta = 0;
+ 996   8                                    
+ 997   8                                    }
+ 998   7                                
+ 999   7                                
+1000   7                                
+1001   7                                
+1002   7                                
+1003   7                                
+1004   7                                
+1005   7                                
+1006   7                                
+1007   7                                }
+1008   6                              else
+1009   6                              {
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 18  
+
+1010   7                                 if(cntinc==3)
+1011   7                                 {
+1012   8                                  if(HeatTmp_real < WindTemperCmd)      
+1013   8                                  {
+1014   9                                    if(HeatTmp_updowmLv != HEATUP)   
+1015   9                                    {
+1016  10                                      if(WindTemperCmd - HeatTmp_real >= 12)
+1017  10                                      {
+1018  11                                        TmpPwmdelta += 5;
+1019  11                                      }
+1020  10                                      else
+1021  10                                      {
+1022  11                                        TmpPwmdelta++;
+1023  11                                      }
+1024  10                                    }
+1025   9                                  }
+1026   8                                  else if(HeatTmp_real > WindTemperCmd)
+1027   8                                  {
+1028   9                                    if(HeatTmp_updowmLv != HEATDOWN)
+1029   9                                    {
+1030  10                                      if(HeatTmp_real - WindTemperCmd >= 12)
+1031  10                                      {
+1032  11                                        TmpPwmdelta -= 5;
+1033  11                                      }
+1034  10                                      else
+1035  10                                      {
+1036  11                                        TmpPwmdelta--;
+1037  11                                      }
+1038  10                                    }
+1039   9                                  } 
+1040   8                                 
+1041   8                                 
+1042   8                                 
+1043   8                                 }
+1044   7      
+1045   7                              
+1046   7                              
+1047   7                              }
+1048   6                                
+1049   6                            
+1050   6                              if(TmpPwmdelta < -20)       // 变量限幅
+1051   6                              {
+1052   7                                  TmpPwmdelta = -20;
+1053   7                              }
+1054   6                          
+1055   6                              if(TmpPwmdelta > 18)
+1056   6                              {
+1057   7                                  TmpPwmdelta = 18;
+1058   7                              }
+1059   6                          }
+1060   5                          else
+1061   5                          {
+1062   6                              TmpPwmdelta = 0;
+1063   6                          }
+1064   5                      }
+1065   4      //                  /* 档位给定 */  /* 温度补正 */   /* 电压补正 */
+1066   4      //                if((Speed_Lv==1)&&(heat_Lv==3))
+1067   4      //                    Heat_duty_act = Heat_duty + PWMadapt;  //+ TmpPwmdelta     // 实际给定发热丝输出duty
+             -，即需要开启发热丝输出的过零点个数
+1068   4      //                else              
+1069   4                          Heat_duty_act = Heat_duty + TmpPwmdelta + PWMadapt;    // 实际给定发热丝输出duty，即�
+             -��要开启发热丝输出的过零点个数
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 19  
+
+1070   4                      
+1071   4                      if(Heat_duty_act > HEAT_PWM_MAX + PWMadapt)    // 限幅，根据当前电压降低限幅�
+             -��，最大48
+1072   4                      {
+1073   5                          Heat_duty_act = HEAT_PWM_MAX + PWMadapt;
+1074   5                      }
+1075   4                      else if(Heat_duty_act < 0)
+1076   4                      {
+1077   5                          Heat_duty_act = 0;
+1078   5                      }
+1079   4                      
+1080   4      
+1081   4                      Heat_duty_act_inc1=Heat_duty_act/2;
+1082   4                      Heat_duty_act_inc2=Heat_duty_act-Heat_duty_act_inc1;
+1083   4                      
+1084   4                      
+1085   4                      
+1086   4                      Heatduty[0] = Heat_duty_act_inc1/3;
+1087   4                      Heatduty[1] = Heatduty[0] + ((Heat_duty_act_inc1%3) >> 1);
+1088   4                      Heatduty[2] = Heat_duty_act_inc1 - Heatduty[0] - Heatduty[1];
+1089   4                      
+1090   4                      Heatduty[3] = Heat_duty_act_inc2/3;
+1091   4                      Heatduty[4] = Heatduty[3] + ((Heat_duty_act_inc2%3) >> 1);
+1092   4                      Heatduty[5] = Heat_duty_act_inc2 - Heatduty[3] - Heatduty[4];
+1093   4                      
+1094   4      //                Heatduty[0] = Heat_duty_act/3;
+1095   4      //                Heatduty[1] = Heatduty[0] + ((Heat_duty_act%3) >> 1);
+1096   4      //                Heatduty[2] = Heat_duty_act - Heatduty[0] - Heatduty[1];
+1097   4                      
+1098   4      //                Heatduty[3] = Heat_duty_act_inc2/3;
+1099   4      //                Heatduty[4] = Heatduty[3] + ((Heat_duty_act_inc2%3) >> 1);
+1100   4      //                Heatduty[5] = Heat_duty_act_inc2 - Heatduty[3] - Heatduty[4];
+1101   4                      
+1102   4                      if(Getzero_flag)            // 交流电过零点
+1103   4                      {
+1104   5                          Getzero_flag = 0;
+1105   5                        
+1106   5                        
+1107   5                        
+1108   5      
+1109   5                          if(Heat_duty_cycle & 0x01)  // 最低位是否为1
+1110   5                          {
+1111   6                              if(Heat_on_cnt == (Heat_duty_cycle >> 1))
+1112   6                              {
+1113   7                                  Secoff_flag = 1;
+1114   7                              }
+1115   6                          }
+1116   5                          else
+1117   5                          {
+1118   6                              Secoff_flag = 0;
+1119   6                              Secoffcnt = 0;
+1120   6                          }
+1121   5                        
+1122   5                          
+1123   5                          
+1124   5                          
+1125   5                          
+1126   5                          Heat_on_cnt++;
+1127   5                          if(Heat_on_cnt > ((HEAT_TIMECNT_MAX >> 1) - 1) )
+1128   5                          {
+1129   6                              Heat_on_cnt = 0;
+1130   6                              Heatdutycnt++;
+C51 COMPILER V9.60.7.0   ADDFUNCTION                                                       08/30/2023 13:47:05 PAGE 20  
+
+1131   6                              if(Heatdutycnt > 5)
+1132   6                              {
+1133   7                                  Heatdutycnt = 0;
+1134   7                              }
+1135   6                              Heat_duty_cycle = Heatduty[Heatdutycnt];
+1136   6                          }
+1137   5                   
+1138   5                          if(Heat_on_cnt < ((Heat_duty_cycle + 1) >> 1))
+1139   5                          {
+1140   6                              Heat_on_flag = 1;
+1141   6                          }
+1142   5                          else
+1143   5                          {
+1144   6                              Heat_on_flag = 0;
+1145   6                          }
+1146   5                      }
+1147   4                      
+1148   4                      if(Secoff_flag)             // 周期为奇数时半波关闭
+1149   4                      {
+1150   5                          Secoffcnt++;
+1151   5                          if(Secoffcnt > 3)       // 半波时间，和硬件设计有关，过零点周期20ms�
+             -��半波为10ms
+1152   5                          {
+1153   6                              Secoffcnt = 0;
+1154   6                              Secoff_flag = 0;
+1155   6                              GP07 = !HEAT_ON_LEVEL;
+1156   6      //                        Heat_on_flag = 0;       // 清0 防止进入过零中断后再开输出
+1157   6                          }
+1158   5                      }
+1159   4                  }
+1160   3              }
+1161   2          }
+1162   1          else
+1163   1          {
+1164   2              GP07 = !HEAT_ON_LEVEL;
+1165   2              Heat_on_delay = 0;
+1166   2              Heatonoffcnt  = 0;
+1167   2              Heat_on_flag = 0;
+1168   2              Heat_on_cnt = 0;
+1169   2              Tmpregularcnt = 0;
+1170   2              TmpPwmdelta = 0;
+1171   2              Secoff_flag = 0;
+1172   2              Secoffcnt = 0;
+1173   2          }
+1174   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3754    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =    107       4
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

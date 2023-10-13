@@ -1,0 +1,158 @@
+C51 COMPILER V9.60.7.0   STARTUPINITANDSWITCH                                              08/30/2023 13:47:06 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE STARTUPINITANDSWITCH
+OBJECT MODULE PLACED IN .\Output\StartupInitandSwitch.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Function\StartupInitandSwitch.c LARGE OMF2 WARNINGLEVEL(0
+                    -) OPTIMIZE(9,SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\StartupInitan
+                    -dSwitch.lst) TABS(2) OBJECT(.\Output\StartupInitandSwitch.obj)
+
+line level    source
+
+   1          /* --------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen -----------------------------
+   2              File Name      : StartupInitandSwitch.c
+   3              Author         : Fortiortech  Appliction Team
+   4              Version        : V1.0
+   5              Date           : 2022-7-23
+   6              Description    : This file contains StartupInitandSwitch.c function used for Motor Startup.
+   7          ----------------------------------------------------------------------------------------------------
+   8                                                 All Rights Reserved
+   9          ------------------------------------------------------------------------------------------------- */
+  10          
+  11          #include <FU68xx_2.h>
+  12          #include <Myproject.h>
+  13          
+  14          /*  -------------------------------------------------------------------------------------------------
+  15              Function Name  : LowSpeedObserverInit
+  16              Description    : 低速观测器参数初始化
+  17              Date           : 2022-07-23
+  18              Parameter      : None
+  19              ------------------------------------------------------------------------------------------------- */
+  20          #if (START_MODE == Observer_Start)  
+              void LowSpeedObserverInit(void)
+              {
+                memset(&LowSpeedObserver, 0, sizeof(MCLowSpeedObserver));
+                  FOC_EFREQACC    = 0;
+                  FOC_EFREQMIN    = 0;
+                  FOC_EFREQHOLD   = 0;
+                  ClrBit(FOC_CR1, RFAE);
+                  ClrBit(FOC_CR1, EFAE); 
+                  ClrBit(FOC_CR1, ANGM);
+                  FOC_EKLPFMIN = 32767;
+                  Startup.BEMFLPFK = 32767;
+                  LowSpeedObserver.Observer_Count = 1;
+                  Startup.LowSpeedObserverK1 = LowSpeedObserver_K1;
+                  Startup.LowSpeedObserverK2 = LowSpeedObserver_K2;
+                  Startup.LowSpeedObserverK3 = LowSpeedObserver_K3;
+                  Startup.BEMFFliterCount = BEMFFliter_Count;
+                  Startup.Initgain = Init_gain;
+                  Startup.AngleCom = Angle_Com;
+                  Startup.LowSpeedObserverDeltaThetaK = LowSpeedObserverDeltaTheta_K;
+                  Startup.ForcedSpeedCount = 0;
+                  Startup.ForcedSpeedCountValue = ForcedSpeedCount_Value;
+                  Startup.ForcedSpeed = Forced_Speed;
+                  Startup.ForcedSpeed1 = ForcedSpeed_1;
+                  Startup.ForcedSpeed2 = ForcedSpeed_2;
+                  Startup.ForcedSpeedLoopPeriod = ForcedSpeedLoop_Period;
+                  Startup.ForcedSpeedNegativeValue1 = ForcedSpeed_NegativeValue1;
+                  Startup.ForcedSpeedNegativeValue2 = ForcedSpeed_NegativeValue2;
+                  LPF1_YH = 0;
+                  LPF1_YL = 0;
+                  LPF1_K = 100;
+                  LowSpeedObserver.state = 1;
+              }
+              
+C51 COMPILER V9.60.7.0   STARTUPINITANDSWITCH                                              08/30/2023 13:47:06 PAGE 2   
+
+              /*  -------------------------------------------------------------------------------------------------
+                  Function Name  : StartupState
+                  Description    : 启动状态机控制
+                  Date           : 2022-07-23
+                  Parameter      : None
+                  ------------------------------------------------------------------------------------------------- */
+              
+              void StartupState(void)
+              {
+                  switch (LowSpeedObserver.state)
+                      {
+                          case 1:
+                             MCLowSpeedObserverFunction();                   //44us执行时间
+                             if (LowSpeedObserver.LowSpeedObserverOmega_32.s16[0] > 4000)                       //转速大
+             -于设定值时开始计数
+                             {
+                                 if (LowSpeedObserver.Switch_Count < 400)
+                                 {
+                                     LowSpeedObserver.Switch_Count++;
+                                 }
+                             }
+                             else
+                             {
+                                 if (LowSpeedObserver.Switch_Count > 1)
+                                 {
+                                     LowSpeedObserver.Switch_Count = LowSpeedObserver.Switch_Count - 1;
+                                 }
+                             }
+                             if (LowSpeedObserver.Switch_Count > 200)                   //计数超过设定值时切入闭环，防止
+             -逆风误判断切入内部估算器
+                             {
+                                 LowSpeedObserver.state = 2;
+                                 LowSpeedObserver.ThetaDelta = FOC__THETA - FOC__ETHETA + LowSpeedObserver.LowSpeedObser
+             -verDeltaTheta_32.s16[0];                    
+                                 LowSpeedObserver.Smoothswith_Count = 0;
+                             }     
+                
+                             break;
+                          case 2:
+                              SetBit(FOC_CR1, ANGM);
+                              LowSpeedObserver.state = 3;
+                              break;
+                          case 3:
+                              if (FOC_EK3 < OBS_K3T1)
+                              {
+                                  FOC_EK3 = FOC_EK3 + 3;
+                              }
+                              else
+                              {
+                                  FOC_EK3 = OBS_K3T1;
+                              }
+                              if (LowSpeedObserver.Smoothswith_Count < 512)
+                              {
+                                  LowSpeedObserver.Smoothswith_Count++;
+                                  FOC__THETA = FOC__ETHETA + ((LowSpeedObserver.ThetaDelta >> 9)*(512 - LowSpeedObserver
+             -.Smoothswith_Count));              
+                              }
+              //                if  (Startup.BEMFLPFK > OBS_EA_KS)
+              //                {
+              //                    Startup.BEMFLPFK = Startup.BEMFLPFK - 10;                    
+              //                }
+              //                else
+C51 COMPILER V9.60.7.0   STARTUPINITANDSWITCH                                              08/30/2023 13:47:06 PAGE 3   
+
+              //                {
+                                  Startup.BEMFLPFK = OBS_EA_KS;
+              //                }
+                              FOC_EKLPFMIN = Startup.BEMFLPFK;
+                              break;
+                          default:
+                              break;
+                      }
+              }
+              #endif
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   ----    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

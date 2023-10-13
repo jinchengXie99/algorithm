@@ -1,0 +1,969 @@
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE KEYSCAN
+OBJECT MODULE PLACED IN .\Output\KeyScan.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Function\KeyScan.c LARGE OMF2 WARNINGLEVEL(0) OPTIMIZE(9,
+                    -SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\KeyScan.lst) TABS(2) OBJEC
+                    -T(.\Output\KeyScan.obj)
+
+line level    source
+
+   1          /*  -------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen ---------------------------*/
+   2          /**
+   3           * @copyright (C) COPYRIGHT 2022 Fortiortech Shenzhen
+   4           * @file      xxx.c
+   5           * @author    Fortiortech  Appliction Team
+   6           * @since     Create:2022-07-14
+   7           * @date      Last modify:2022-07-14
+   8           * @note      Last modify author is Leo.li
+   9           * @brief      
+  10           */
+  11          
+  12          
+  13          /* Includes --------------------------------------------------------------------------------------*/
+  14          #include <FU68xx_2.h>
+  15          #include <Myproject.h>
+  16          
+  17          
+  18          uint8 SW1_Flag = 0;
+  19          uint8 SW2_Flag = 0;
+  20          uint8 SW3_Flag = 0;
+  21          
+  22          uint8 Flag_Key1Value = 0;      //档位变换顺序
+  23          uint8 Flag_Key2Value = 0;
+  24          
+  25          uint8 Loop1msCnt = 0;
+  26          
+  27          uint8 xdata Key_spd_Flag = 0;
+  28          uint8 Key_spd_old = 0;
+  29          uint8 Key_spd_new = 0;
+  30          uint8 Key_spd_Lv_old = 0;
+  31          uint8 Key_spd_Lv_new = 0;
+  32          
+  33          uint8 xdata Key_heat_Flag = 0;
+  34          uint8 Key_heat_old = 0;
+  35          uint8 Key_heat_new = 0;
+  36          uint8 Key_heat_Lv_old = 0;
+  37          uint8 Key_heat_Lv_new = 0;
+  38          
+  39          uint8 Speed_Lv = 0;
+  40          uint8 Speed_Lv_old = 0; 
+  41          uint8 heat_Lv = 0, heat_Lv_Init = 0;
+  42          uint8 heat_Lv_old = 0;
+  43          
+  44          uint8 Heat_on_flag = 0;
+  45          int8  Heat_duty = 0;
+  46          int16 Heat_duty_act = 0;
+  47          uint8 Heat_duty_yu  = 0;
+  48          int8  Heat_duty_cycle = 0;
+  49          int8  Heat_duty_max = 0;
+  50          uint8 Heat_on_cnt = 0;
+  51          uint16 Heat_on_delay = 0;
+  52          
+  53          uint16 Key_ADvalue_avg = 0;
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 2   
+
+  54          
+  55          uint8 Led_play_mode = 0;                 //6LED分时显示状态位    
+  56          //bit Led_D1_Lv = 0;
+  57          //bit Led_D2_Lv = 0;
+  58          //bit Led_D3_Lv = 0;
+  59          //bit Led_D4_Lv = 0;
+  60          //bit Led_D5_Lv = 0;
+  61          //bit Led_D6_Lv = 0;                    //0位-D1   1位-D2   2位-D3   3位-D4   4位-D5   5位-D6
+  62          
+  63          
+  64          uint32 HeatTmp_ADvalue_sum = 0;
+  65          uint16 HeatTmp_ADvalue_avg = 0;
+  66          uint8  HeatTmp_sum_cnt = 0;
+  67          uint8  HeatTmp_real =0;
+  68          uint8  Overtmpcnt = 0, Overtmp_flag = 0;
+  69          uint16 Overtmp_recovercnt = 0;
+  70          
+  71          uint8  WindTemperCmd = 0;
+  72          uint16 Tmpregularcnt = 0;
+  73          int8   TmpPwmdelta = 0;
+  74          uint8  HeatTmp_old = 0, HeatTmp_new = 0;
+  75          uint8  HeatTmp_updowmLv = 0;              //0：上升    1：恒定    2：下降
+  76          
+  77          
+  78          uint8  Keysavevalue = 0;
+  79          
+  80          uint16 RuntimeCntX1ms  = 0;
+  81          uint8  RuntimeCntX1min = 0;               //运行时间计数——分钟
+  82          uint16 RuntimeCntXn   = 0;                //运行时间计数——RuntimeCntX1ms的倍数
+  83          extern uint8 FlashPieceNum;
+  84          
+  85          uint16  Ledflashcnt = 0;
+  86          
+  87          uint16 Heatonoffcnt = 0;
+  88          
+  89          uint8  Ledselfcheckflag = 0;
+  90          uint16 Ledselfcheckcnt = 0;
+  91          
+  92          uint8  Cool_Lv = 0;
+  93          uint8  Cool_Lv_on_cnt = 0;
+  94          uint8  Cool_Lv_off_cnt = 0;
+  95          
+  96          uint8  DatTxCnt = 0;
+  97          
+  98          uint16 LedErrflashcnt = 0;
+  99          
+ 100          uint16 Heaterrcnt = 0;
+ 101          uint8  Secoff_flag = 0;
+ 102          uint8  Secoffcnt = 0;
+ 103          
+ 104          uint8 xdata Heatduty[6] = {0, 0, 0,0, 0, 0};
+ 105          
+ 106          uint8 Heatdutycnt = 0;
+ 107          
+ 108          uint8  Spd_looptime = 0;
+ 109          uint8 xdata BlockFlashNum = 0;
+ 110          /* Private variables ----------------------------------------------------------------------------*/
+ 111          KeyScanParam_TypeDef xdata KS;
+ 112          
+ 113          
+ 114          /*  -------------------------------------------------------------------------------------------------
+ 115              Function Name : void KeyInit(void)
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 3   
+
+ 116              Description   : 按键参数初始化
+ 117              Input         : 无
+ 118              Output                :   无
+ 119              -------------------------------------------------------------------------------------------------*/
+ 120          void KeyInit(void)
+ 121          {
+ 122   1          uint8 i;
+ 123   1      //    uint8 revalue = 1;
+ 124   1      //    KS.Key1Value = 0x01;
+ 125   1      //    KS.Key2Value = 0x10;
+ 126   1      //    KS.Key3Value = 0x00;
+ 127   1      //    KS.KeyValuetotal     = KS.Key1Value ^ KS.Key2Value ^ KS.Key3Value;
+ 128   1          Rom.WriteAddress = STARTPAGEROMADDRESS;              //给定写入初地址
+ 129   1      //    Rom.ReadValue  = ReadFlashValue(Rom.WriteAddress);    //读取指定地址值 
+ 130   1      //    
+ 131   1      //    if ((Rom.ReadValue == 0x11) || (Rom.ReadValue == 0x21) || (Rom.ReadValue == 0x41) || (Rom.ReadValue 
+             -== 0x12) || (Rom.ReadValue == 0x22)
+ 132   1      //        || (Rom.ReadValue == 0x42) || (Rom.ReadValue == 0x14) || (Rom.ReadValue == 0x24) || (Rom.ReadVal
+             -ue == 0x44) || (Rom.ReadValue == 0x18)
+ 133   1      //        || (Rom.ReadValue == 0x28) || (Rom.ReadValue == 0x48))
+ 134   1      //    {
+ 135   1      //        KS.KeyValuetotal   = Rom.ReadValue;
+ 136   1      //        KS.Key1Value = Rom.ReadValue & 0x0F;
+ 137   1      //        KS.Key2Value = Rom.ReadValue & 0x70;;
+ 138   1      //        KS.Key3Value = 0x00;
+ 139   1      //    }
+ 140   1      //    else
+ 141   1      //    {
+ 142   1      //    revalue = Flash_Sector_Erase(Rom.WriteAddress);     //擦除扇区
+ 143   1      //    if(! revalue)
+ 144   1      //    {     
+ 145   1      //           Flash_KeyWriteValue(Rom.WriteAddress,0x21);      //指定地址写值
+ 146   1      //    }
+ 147   1      //    else
+ 148   1      //    {
+ 149   1      //       Rom.ReadValue = 0; 
+ 150   1      //    }
+ 151   1      //        EA = 1;
+ 152   1      //    }
+ 153   1      //    
+ 154   1      //    KS.OldKeyValuetotal  = 0;
+ 155   1      //    KS.ChangeKeyFlg      = 0;
+ 156   1      //    KS.Key1PressCnt = 0;
+ 157   1      
+ 158   1          #if (SPEED_MODE == KEYSCANMODE)
+                  {
+                      FlashPieceNum = 0;
+                      if(ReadFlashValue(Rom.WriteAddress) != 0xA5)  //第一次上电，未存储过
+                      {
+                          Flash_Sector_Erase(Rom.WriteAddress);       //擦除扇区
+                          Speed_Lv = SPD_LV_ON; //SPD_LV_ON;
+                          heat_Lv  = HEAT_LV_ON; // HEAT_LV_ON;
+                          RuntimeCntX1min = 0;
+                          RuntimeCntXn = 0;
+                      }
+                      else
+                      {
+                          for(i=0;i<=24;i++)
+                          {
+                              if((*(uint8 code *)(Rom.WriteAddress + i*5)) == 0xA5)
+                              FlashPieceNum = i;                   
+                          }
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 4   
+
+                      
+                          RuntimeCntXn = 0;
+                          RuntimeCntXn |= (*(uint8 code *)(Rom.WriteAddress + FlashPieceNum*5 + 1)) << 8;
+                          RuntimeCntXn |= (*(uint8 code *)(Rom.WriteAddress + FlashPieceNum*5 + 2));
+                          RuntimeCntX1min = (*(uint8 code *)(Rom.WriteAddress + FlashPieceNum*5 + 3));
+                          Speed_Lv = (*(uint8 code *)(Rom.WriteAddress + FlashPieceNum*5 + 4)) >> 4;
+                          heat_Lv  = ( (*(uint8 code *)(Rom.WriteAddress + FlashPieceNum*5 + 4)) & 0x0F);
+                          FlashPieceNum++;                            //下一次存储的为本扇区第几次存储
+                      }
+                      
+                      if(FlashPieceNum >= 25)
+                      {
+                        Flash_Sector_Erase(Rom.WriteAddress);     //擦除扇区    
+                        FlashPieceNum = 0;
+                      }
+                      
+                      Ledselfcheckflag = 1;
+                  }
+                  #elif (SPEED_MODE == TOUCHMODE)
+ 195   1          {
+ 196   2              while(ReadFlashValue(Rom.WriteAddress + BlockFlashNum))
+ 197   2              {
+ 198   3                  BlockFlashNum++;
+ 199   3                  if(BlockFlashNum >= 128)
+ 200   3                  {
+ 201   4                      Flash_Sector_Erase(Rom.WriteAddress);
+ 202   4                      BlockFlashNum = 0;
+ 203   4                  }
+ 204   3              }
+ 205   2              
+ 206   2              if(BlockFlashNum == 0)
+ 207   2              {
+ 208   3                  heat_Lv = 1;
+ 209   3              }
+ 210   2              else    // 实际输出下来的 Rom.WriteAddress + BlockFlashNum 地址是空地址，上一个�
+             -�址才有数据
+ 211   2              {
+ 212   3                  heat_Lv = ReadFlashValue(Rom.WriteAddress + BlockFlashNum - 1);
+ 213   3              }
+ 214   2          }
+ 215   1          #endif
+ 216   1          
+ 217   1          heat_Lv_Init = heat_Lv;
+ 218   1      }
+ 219          
+ 220          /*  -------------------------------------------------------------------------------------------------
+ 221              Function Name : uint8 KeyValue(void)
+ 222              Description   : 功能函数，获取按键值，选择返回键位值还是管脚电平KeyValue
+ 223              Input         : 无
+ 224              Output                :   键位值或者管脚电平KeyValue
+ 225              -------------------------------------------------------------------------------------------------*/
+ 226          int KeyValue(void)
+ 227          {
+ 228   1      /* SW1 Scan */
+ 229   1          if (SW1 == 0)                       // 0x00-0x01-0x04....
+ 230   1          {
+ 231   2              if (SW1_Flag == 0)
+ 232   2              {
+ 233   3                  KS.Key1PressCnt ++;
+ 234   3                  
+ 235   3                  if (KS.Key1PressCnt >= KeyFilterTime)           // 按键滤波
+ 236   3                  {
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 5   
+
+ 237   4                      KS.Key1PressCnt = KeyFilterTime;
+ 238   4                      SW1_Flag = 1;                               // SW1按下标记，自锁
+ 239   4                      
+ 240   4                if(KS.Key1Value < 0x08)                     // 变量初始值？
+ 241   4                  KS.Key1Value = KS.Key1Value << 1;     // [1]0x01-0x02 \ [2]0x04-0x08 \ [3]0x04-0x08-1
+ 242   4                else                                      // [4]0x04-0x08-1
+ 243   4                  KS.Key1Value = 0x01;
+ 244   4                
+ 245   4                      if ((KS.Key1Value < 0x08) && (Flag_Key1Value == 0))
+ 246   4                      {
+ 247   5                          KS.Key1Value = KS.Key1Value << 1;       // [1]0x02-0x04
+ 248   5                      }
+ 249   4                      else if ((KS.Key1Value > 0x01) && (Flag_Key1Value == 1))
+ 250   4                      {
+ 251   5                          KS.Key1Value = KS.Key1Value >> 1;       // [3]0x08-0x04-1 \ [4]0x08-0x04-1
+ 252   5                      }
+ 253   4                      else if (KS.Key1Value == 0x08)
+ 254   4                      {
+ 255   5                          Flag_Key1Value = 1;
+ 256   5                          KS.Key1Value = KS.Key1Value >> 1;       // [2]0x08-0x04-1
+ 257   5                      }
+ 258   4                      else if (KS.Key1Value == 0x01)
+ 259   4                      {
+ 260   5                          Flag_Key1Value = 0;
+ 261   5                          KS.Key1Value = KS.Key1Value << 1;
+ 262   5                      }
+ 263   4                      else                                // KS.Key1Value = 0x00时进入
+ 264   4                      {
+ 265   5                          Flag_Key1Value = 0;
+ 266   5                          KS.Key1Value = 0x01;            // 第一次给定初始值0x01 [0]0x00-0x01
+ 267   5                      }
+ 268   4                  }
+ 269   3              }
+ 270   2              else if (SW1_Flag == 1)
+ 271   2              {
+ 272   3                  KS.Key1Value = KS.Key1Value ;
+ 273   3              }
+ 274   2              else                        // SW1_Flag != 0   // 1
+ 275   2              { SW1_Flag = 0; }
+ 276   2          }
+ 277   1          else                            // 松开按键
+ 278   1          {
+ 279   2              KS.Key1PressCnt --;
+ 280   2              
+ 281   2              if (KS.Key1PressCnt <= 0)       // 按键滤波
+ 282   2              {
+ 283   3                  KS.Key1PressCnt = 0;
+ 284   3                  SW1_Flag = 0;               // 清0按键自锁标记
+ 285   3              }
+ 286   2          }
+ 287   1          
+ 288   1          /* SW2 Scan */
+ 289   1          if (SW2 == 0)                       // 0x00-0x10-[0x20-0x40-0x20-0x10]循环   3个档位循环
+ 290   1          {
+ 291   2              if (SW2_Flag == 0)
+ 292   2              {
+ 293   3                  KS.Key2PressCnt ++;
+ 294   3                  
+ 295   3                  if (KS.Key2PressCnt >= KeyFilterTime)
+ 296   3                  {
+ 297   4                      KS.Key2PressCnt = KeyFilterTime;
+ 298   4                      SW2_Flag = 1;
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 6   
+
+ 299   4                      
+ 300   4                      if ((KS.Key2Value < 0x40) && (Flag_Key2Value == 0))
+ 301   4                      {
+ 302   5                          KS.Key2Value = KS.Key2Value << 1;
+ 303   5                      }
+ 304   4                      else if ((KS.Key2Value > 0x10) && (Flag_Key2Value == 1))
+ 305   4                      {
+ 306   5                          KS.Key2Value = KS.Key2Value >> 1;
+ 307   5                      }
+ 308   4                      else if (KS.Key2Value == 0x40)
+ 309   4                      {
+ 310   5                          Flag_Key2Value = 1;
+ 311   5                          KS.Key2Value = KS.Key2Value >> 1;
+ 312   5                      }
+ 313   4                      else if (KS.Key2Value == 0x10)
+ 314   4                      {
+ 315   5                          Flag_Key2Value = 0;
+ 316   5                          KS.Key2Value = KS.Key2Value << 1;
+ 317   5                      }
+ 318   4                      else
+ 319   4                      {
+ 320   5                          Flag_Key2Value = 0;
+ 321   5                          KS.Key2Value = 0x10;
+ 322   5                      }
+ 323   4                  }
+ 324   3              }
+ 325   2              else if (SW2_Flag == 1)
+ 326   2              {
+ 327   3                  KS.Key2Value = KS.Key2Value ;
+ 328   3              }
+ 329   2              else
+ 330   2              { SW2_Flag = 0; }
+ 331   2          }
+ 332   1          else
+ 333   1          {
+ 334   2              KS.Key2PressCnt --;
+ 335   2              
+ 336   2              if (KS.Key2PressCnt <= 0)
+ 337   2              {
+ 338   3                  KS.Key2PressCnt = 0;
+ 339   3                  SW2_Flag = 0;
+ 340   3              }
+ 341   2          }
+ 342   1          
+ 343   1          /* SW3 Scan */
+ 344   1      //    if (SW3 == 0)
+ 345   1      //    {
+ 346   1      //        KS.Key3releaseCnt = 0;
+ 347   1      //        
+ 348   1      //        if (KS.Key3PressCnt < KeyFilterTime + 10)
+ 349   1      //        {
+ 350   1      //            KS.Key3PressCnt++;
+ 351   1      //        }
+ 352   1      //        
+ 353   1      //        if (SW3_Flag == 0)
+ 354   1      //        {
+ 355   1      //            if (KS.Key3PressCnt >= KeyFilterTime)
+ 356   1      //            {
+ 357   1      //                KS.Key3PressCnt = KeyFilterTime;
+ 358   1      //                SW3_Flag = 1;
+ 359   1      //                KS.Key3Value = 0x80;
+ 360   1      //            }
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 7   
+
+ 361   1      //        }
+ 362   1      //        else if (SW3_Flag == 1)
+ 363   1      //        {
+ 364   1      //            KS.Key3Value = KS.Key3Value ;
+ 365   1      //        }
+ 366   1      //    }
+ 367   1      //    else
+ 368   1      //    {
+ 369   1      //        KS.Key3PressCnt = 0;
+ 370   1      //        
+ 371   1      //        if (KS.Key3releaseCnt < 100)
+ 372   1      //        { KS.Key3releaseCnt++; }
+ 373   1      //        
+ 374   1      //        if (KS.Key3releaseCnt >= 80)
+ 375   1      //        {
+ 376   1      //            SW3_Flag = 0;
+ 377   1      //            KS.Key3Value = 0x00;
+ 378   1      //        }
+ 379   1      //    }
+ 380   1          
+ 381   1          return (KS.Key1Value ^ KS.Key2Value ^ KS.Key3Value);
+ 382   1      }
+ 383          
+ 384          /*  -------------------------------------------------------------------------------------------------
+ 385              Function Name : void KeyScan(void)
+ 386              Description   : 功能函数，按键扫描，按键触发传递出按键命令
+ 387              Input         : 无
+ 388              Output                :   无
+ 389              -------------------------------------------------------------------------------------------------*/
+ 390          void KeyScan(void)
+ 391          {
+ 392   1          KS.OldKeyValuetotal = KS.KeyValuetotal;
+ 393   1          KS.KeyValuetotal = KeyValue();               // 两个按键信号
+ 394   1          
+ 395   1          if (KS.OldKeyValuetotal != KS.KeyValuetotal)    // 按键信号有改变
+ 396   1          {
+ 397   2              if ((mcState == mcRun))
+ 398   2              {
+ 399   3                  KS.ChangeKeyFlg = 1;
+ 400   3              }
+ 401   2          }
+ 402   1      }
+ 403          
+ 404          
+ 405          
+ 406          int16 CalTemperOffset(uint16 base,uint16 val, uint16 warm, uint16 cool)
+ 407          {
+ 408   1        return(base - 25*(val-warm)/(cool-warm));
+ 409   1      }
+ 410          
+ 411          void UARTDataSend(void)
+ 412          {
+ 413   1          if(DatTxCnt == 0)
+ 414   1          {
+ 415   2              UT_DR = 0xA5;
+ 416   2              DatTxCnt++;
+ 417   2          }
+ 418   1          else if(DatTxCnt == 1)
+ 419   1          {
+ 420   2              if(TI == 1)
+ 421   2              {
+ 422   3                  TI = 0;
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 8   
+
+ 423   3                  UT_DR = (RuntimeCntXn >> 8);
+ 424   3                  DatTxCnt++;
+ 425   3              }
+ 426   2          }
+ 427   1          else if(DatTxCnt == 2)
+ 428   1          {
+ 429   2              if(TI == 1)
+ 430   2              {
+ 431   3                  TI = 0;
+ 432   3                  UT_DR = RuntimeCntXn;
+ 433   3                  DatTxCnt++;
+ 434   3              }
+ 435   2          }
+ 436   1          else if(DatTxCnt == 3)
+ 437   1          {
+ 438   2              if(TI == 1)
+ 439   2              {
+ 440   3                  TI = 0;
+ 441   3                  UT_DR = RuntimeCntX1min;
+ 442   3                  DatTxCnt++;
+ 443   3              }
+ 444   2          }
+ 445   1      }
+ 446          
+ 447          void Key_Led_Ctrl(void)
+ 448          {
+ 449   1          if(++Loop1msCnt > 9)
+ 450   1          {
+ 451   2              Loop1msCnt = 0;                 // 10ms计时
+ 452   2          }
+ 453   1        
+ 454   1          if(++RuntimeCntX1ms >= 60000)
+ 455   1          {
+ 456   2              RuntimeCntX1ms = 0;
+ 457   2              if(++RuntimeCntX1min >= 255)    // min计时
+ 458   2              {
+ 459   3                  RuntimeCntXn++;
+ 460   3              }
+ 461   2          }
+ 462   1        
+ 463   1          UARTDataSend();       // UART传输上电时间
+ 464   1          
+ 465   1          Keysavevalue = (Speed_Lv << 4) + heat_Lv;   // 速度和温度档位掉电存储变量
+ 466   1        
+ 467   1          //调速按键
+ 468   1          if(Loop1msCnt == 0)       // 10ms执行一次，速度档位信号获取
+ 469   1          {            
+ 470   2              if((Key_ADvalue_avg > 3100) && (Key_ADvalue_avg < 3600)) // 按键信号处理，AD信号，速度
+             -调档有效信号
+ 471   2              {
+ 472   3                  Key_spd_old = 0;
+ 473   3                  Key_spd_new++;
+ 474   3                  
+ 475   3                  if((Key_spd_new > 1) && (Key_spd_Flag == 1))
+ 476   3                  {
+ 477   4                      Key_spd_new  = 0;
+ 478   4                      Key_spd_Flag = 0;        // AD信号在速度调整档位范围内
+ 479   4                      Speed_Lv++;
+ 480   4                      if(Speed_Lv > SPD_LV_MAX)         //1-2-3   对应    1-2-3
+ 481   4                      {
+ 482   5                          Speed_Lv = 1;
+ 483   5                      }
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 9   
+
+ 484   4                  }
+ 485   3              }
+ 486   2              else
+ 487   2              {
+ 488   3                  Key_spd_new  = 0;
+ 489   3                  Key_spd_old++;
+ 490   3                  if((Key_spd_old > 1) && (Key_spd_Flag == 0))
+ 491   3                  {
+ 492   4                      Key_spd_old  = 0;
+ 493   4                      Key_spd_Flag = 1;
+ 494   4                  }
+ 495   3              }
+ 496   2          }
+ 497   1          
+ 498   1          else if(Loop1msCnt == 2)      // 10ms执行一次，温度档位获取
+ 499   1          {
+ 500   2              if(mcState == mcRun)
+ 501   2              {      
+ 502   3                  if((Key_ADvalue_avg > 1800) && (Key_ADvalue_avg < 2300)) // 冷风档判断
+ 503   3                  {
+ 504   4                      Cool_Lv_off_cnt = 0;
+ 505   4                      Cool_Lv_on_cnt++;
+ 506   4                      if(Cool_Lv_on_cnt >= 100)
+ 507   4                      {
+ 508   5                          Cool_Lv_on_cnt = 100;
+ 509   5                          Cool_Lv = 1;
+ 510   5                      }
+ 511   4                  }
+ 512   3                  else
+ 513   3                  {
+ 514   4                      Cool_Lv_on_cnt = 0;
+ 515   4                      Cool_Lv_off_cnt++;
+ 516   4                      if(Cool_Lv_off_cnt >= 100)
+ 517   4                      {
+ 518   5                          Cool_Lv_off_cnt = 100;
+ 519   5                          Cool_Lv = 0;
+ 520   5                      }
+ 521   4                  }
+ 522   3            
+ 523   3                  if(Cool_Lv != 1)
+ 524   3                  {
+ 525   4                      Key_heat_old = 0;
+ 526   4                      Key_heat_new++;
+ 527   4                      if((Key_heat_new > 1) && (Key_heat_Flag == 1))
+ 528   4                      {
+ 529   5                          Key_heat_new  = 0;
+ 530   5                          Key_heat_Flag = 0;
+ 531   5                          
+ 532   5                          heat_Lv++;
+ 533   5                          if(heat_Lv > HEAT_LV_MAX)             //0-1-2-3-4    对应    0-1-2-3-4
+ 534   5                          {
+ 535   6                              heat_Lv = 0;
+ 536   6                          }
+ 537   5                      }
+ 538   4                  }
+ 539   3                  else
+ 540   3                  {
+ 541   4                      Key_heat_new = 0;
+ 542   4                      Key_heat_old++;
+ 543   4                      if((Key_heat_old > 1) && (Key_heat_Flag == 0))
+ 544   4                      {
+ 545   5                          Key_heat_old  = 0;
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 10  
+
+ 546   5                          Key_heat_Flag = 1;
+ 547   5                      }
+ 548   4                  }
+ 549   3              }
+ 550   2          }
+ 551   1        
+ 552   1          /************转速/温度给定*************/
+ 553   1          else if(Loop1msCnt == 4)              // 10ms执行一次，和上述判断周期错开
+ 554   1          {
+ 555   2              switch (Speed_Lv)
+ 556   2              {
+ 557   3                  case  1 :  MCCtrl.TargetValue = Motor_Speed_Low;
+ 558   3                  break;
+ 559   3            
+ 560   3                  case  2 :  MCCtrl.TargetValue = Motor_Speed_Mid;
+ 561   3                  break;
+ 562   3            
+ 563   3                  case  3 :  MCCtrl.TargetValue = Motor_Speed_HIgh;
+ 564   3                  break;
+ 565   3              }
+ 566   2            
+ 567   2              switch (heat_Lv)                            // 发热丝输出duty限制
+ 568   2              {
+ 569   3                  case  0 :  Heat_duty_max = 0;        
+ 570   3                  break;
+ 571   3            
+ 572   3                  case  1 :  Heat_duty_max = HEAT_PWM_MAX;
+ 573   3                  break;
+ 574   3            
+ 575   3                  case  2 :  Heat_duty_max = HEAT_PWM_MAX;
+ 576   3                  break;
+ 577   3            
+ 578   3                  case  3 :
+ 579   3                      if(Speed_Lv == 3)
+ 580   3                      {
+ 581   4                          Heat_duty_max = HEAT_PWM_MAX;
+ 582   4                      }
+ 583   3                      else
+ 584   3                      {
+ 585   4                          Heat_duty_max = HEAT_PWM_MAX;
+ 586   4                      }
+ 587   3                  break;
+ 588   3                
+ 589   3                  case  4 :
+ 590   3                      if(Speed_Lv == 3)
+ 591   3                      {
+ 592   4                          Heat_duty_max = HEAT_PWM_MAX;
+ 593   4                      }
+ 594   3                      else
+ 595   3                      {
+ 596   4                          Heat_duty_max = HEAT_PWM_MAX;
+ 597   4                      }
+ 598   3                
+ 599   3                      if(++Heatonoffcnt > 1000)         // 5s开5s关
+ 600   3                      {
+ 601   4                          Heatonoffcnt = 0;
+ 602   4                      }
+ 603   3                      else if(Heatonoffcnt > 500)
+ 604   3                      {
+ 605   4                          Heat_duty_max = 0;              // 每5s清0一次，即每5s关闭一次发热丝输�
+             -��
+ 606   4                      }
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 11  
+
+ 607   3                  break;
+ 608   3              }
+ 609   2          
+ 610   2              if( (heat_Lv != 4) || (mcState != mcRun) || (Cool_Lv) )  // 温度档不为4|电机未运行|冷�
+             -�档
+ 611   2              {
+ 612   3                  Heatonoffcnt = 0;
+ 613   3              }
+ 614   2          
+ 615   2              if(Cool_Lv)                 // 冷风模式，关输出
+ 616   2              {
+ 617   3                  Heat_duty_max = 0;        // 限制duty给0，相当于关发热丝输出
+ 618   3              }
+ 619   2          
+ 620   2              switch (heat_Lv)
+ 621   2              {
+ 622   3                  case  1 :
+ 623   3                      if(Speed_Lv == 1)
+ 624   3                      {
+ 625   4                          Heat_duty = HEAT_PWM_LV1_1;
+ 626   4                          WindTemperCmd = TMPVALUECMD_LV1_1;
+ 627   4                      }
+ 628   3                  else if(Speed_Lv == 2)
+ 629   3                  {
+ 630   4                      Heat_duty = HEAT_PWM_LV1_2;
+ 631   4                      WindTemperCmd = TMPVALUECMD_LV1_2;
+ 632   4                  }
+ 633   3                  else
+ 634   3                  {
+ 635   4                      Heat_duty = HEAT_PWM_LV1_3;
+ 636   4                      WindTemperCmd = TMPVALUECMD_LV1_3;
+ 637   4                  }
+ 638   3                  break;
+ 639   3            
+ 640   3                  case  2 :
+ 641   3                      if(Speed_Lv == 1)
+ 642   3                      {
+ 643   4                        Heat_duty = HEAT_PWM_LV2_1;
+ 644   4                        WindTemperCmd = TMPVALUECMD_LV2_1;
+ 645   4                      }
+ 646   3                      else if(Speed_Lv == 2)
+ 647   3                      {
+ 648   4                        Heat_duty = HEAT_PWM_LV2_2;
+ 649   4                        WindTemperCmd = TMPVALUECMD_LV2_2;
+ 650   4                      }
+ 651   3                      else
+ 652   3                      {
+ 653   4                        Heat_duty = HEAT_PWM_LV2_3;
+ 654   4                        WindTemperCmd = TMPVALUECMD_LV2_3;
+ 655   4                      }
+ 656   3                  break;
+ 657   3            
+ 658   3                  case  3 :
+ 659   3                      if(Speed_Lv == 1)
+ 660   3                      {
+ 661   4                          Heat_duty = HEAT_PWM_LV3_1;
+ 662   4                          WindTemperCmd = TMPVALUECMD_LV3_1;
+ 663   4                      }
+ 664   3                      else if(Speed_Lv == 2)
+ 665   3                      {
+ 666   4                          Heat_duty = HEAT_PWM_LV3_2;
+ 667   4                          WindTemperCmd = TMPVALUECMD_LV3_2;
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 12  
+
+ 668   4                      }
+ 669   3                      else
+ 670   3                      {
+ 671   4                          Heat_duty = HEAT_PWM_LV3_3;              
+ 672   4                          WindTemperCmd = TMPVALUECMD_LV3_3;             
+ 673   4                      }
+ 674   3                  break;
+ 675   3                      
+ 676   3                  case  4 :
+ 677   3                      if(Speed_Lv == 1)
+ 678   3                      {
+ 679   4                          Heat_duty = HEAT_PWM_LV3_1;
+ 680   4                      }
+ 681   3                      else if(Speed_Lv == 2)
+ 682   3                      {
+ 683   4                          Heat_duty = HEAT_PWM_LV3_2;
+ 684   4                      }
+ 685   3                      else
+ 686   3                      {
+ 687   4                          Heat_duty = HEAT_PWM_LV3_3;
+ 688   4                      }
+ 689   3                  break;
+ 690   3              }
+ 691   2          
+ 692   2              if( (heat_Lv == 3) && (Speed_Lv == 3) )     // 高温高速档恒温限幅值
+ 693   2              {
+ 694   3                  if((mcFocCtrl.mcDcbusFlt > 22380) && (HeatTmp_real>=148))     // 母线电压平均值
+ 695   3                  {            
+ 696   4                      WindTemperCmd = 140;
+ 697   4                  }
+ 698   3                  else if((mcFocCtrl.mcDcbusFlt < 22130) && (HeatTmp_real<142))
+ 699   3                  {
+ 700   4                      WindTemperCmd = 150;
+ 701   4                  }
+ 702   3              }
+ 703   2          }
+ 704   1      
+ 705   1          /* -----出风口实际温度计算----- */
+ 706   1          else if(Loop1msCnt == 6)
+ 707   1          {
+ 708   2              if(HeatTmp_ADvalue_avg <= CELSIUS_P25_ADC_B)
+ 709   2              {
+ 710   3                  // <50℃
+ 711   3                  if(HeatTmp_ADvalue_avg > CELSIUS_P50_ADC_B)
+ 712   3                      HeatTmp_real = CalTemperOffset(50,HeatTmp_ADvalue_avg,CELSIUS_P50_ADC_B,CELSIUS_P25_ADC_B)
+             -;
+ 713   3                  // <75℃
+ 714   3                  else if(HeatTmp_ADvalue_avg > CELSIUS_P75_ADC_B)
+ 715   3                      HeatTmp_real = CalTemperOffset(75,HeatTmp_ADvalue_avg,CELSIUS_P75_ADC_B,CELSIUS_P50_ADC_B)
+             -;
+ 716   3      //            // <100℃
+ 717   3      //            else if(HeatTmp_ADvalue_avg > CELSIUS_P100_ADC_B)
+ 718   3      //                HeatTmp_real = CalTemperOffset(100,HeatTmp_ADvalue_avg,CELSIUS_P100_ADC_B,CELSIUS_P75_AD
+             -C_B);
+ 719   3      //            // <125℃
+ 720   3      //            else if(HeatTmp_ADvalue_avg > CELSIUS_P125_ADC_B)
+ 721   3      //                HeatTmp_real = CalTemperOffset(125,HeatTmp_ADvalue_avg,CELSIUS_P125_ADC_B,CELSIUS_P100_A
+             -DC_B);
+ 722   3      //            // >125℃
+ 723   3      //            else if(HeatTmp_ADvalue_avg > CELSIUS_P150_ADC_B)
+ 724   3      //                HeatTmp_real = CalTemperOffset(150,HeatTmp_ADvalue_avg,CELSIUS_P150_ADC_B,CELSIUS_P125_A
+             -DC_B);
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 13  
+
+ 725   3      //            else if(HeatTmp_ADvalue_avg > CELSIUS_P175_ADC_B)
+ 726   3      //                HeatTmp_real = CalTemperOffset(175,HeatTmp_ADvalue_avg,CELSIUS_P175_ADC_B,CELSIUS_P150_A
+             -DC_B);
+ 727   3      //            else
+ 728   3      //                HeatTmp_real = 175;
+ 729   3              }
+ 730   2              // <25℃
+ 731   2              else
+ 732   2              {
+ 733   3                  HeatTmp_real = 25;
+ 734   3              }
+ 735   2          }
+ 736   1        
+ 737   1      //  else if(Loop1msCnt == 8)    // 1ms执行一次
+ 738   1          {
+ 739   2              if( (mcState == mcRun)&&(Overtmp_flag == 0)&&(OverVoltageflag == 0) )
+ 740   2              {
+ 741   3                  if(++Heat_on_delay >= 1200)           // 延时1.2s
+ 742   3                  {
+ 743   4                      Heat_on_delay = 1201;
+ 744   4              
+ 745   4                      if(++Tmpregularcnt > 1000)          // 每10ms执行一次
+ 746   4                      {
+ 747   5                          Tmpregularcnt = 0;
+ 748   5                          if( (heat_Lv != 0) && (heat_Lv != 4) && (Cool_Lv != 1) )
+ 749   5                          {
+ 750   6                              HeatTmp_old = HeatTmp_new;
+ 751   6                              HeatTmp_new = HeatTmp_real;
+ 752   6                              if(HeatTmp_new > HeatTmp_old)       // 当前温度比上次低，升温
+ 753   6                              {
+ 754   7                                  HeatTmp_updowmLv = HEATUP;             //温度上升
+ 755   7                              }
+ 756   6                              else if(HeatTmp_new < HeatTmp_old)  // 当前温度比上次高，降温
+ 757   6                              {
+ 758   7                                  HeatTmp_updowmLv = HEATDOWN;           //温度下降
+ 759   7                              }
+ 760   6                              else
+ 761   6                              {
+ 762   7                                  HeatTmp_updowmLv = HEATHOLDON;       //恒温模式
+ 763   7                              }
+ 764   6                  
+ 765   6                              if(HeatTmp_real < WindTemperCmd)         // 实际温度低于设定温度值
+ 766   6                              {
+ 767   7                                  if(HeatTmp_updowmLv != HEATUP)         // 温度比上次低
+ 768   7                                  {
+ 769   8                                      if(WindTemperCmd - HeatTmp_real >= 12)
+ 770   8                                      {
+ 771   9                                          TmpPwmdelta += 5;
+ 772   9                                      }
+ 773   8                                      else
+ 774   8                                      {
+ 775   9                                          TmpPwmdelta++;
+ 776   9                                      }
+ 777   8                                  }
+ 778   7                              }
+ 779   6                              else if(HeatTmp_real > WindTemperCmd)
+ 780   6                              {
+ 781   7                                  if(HeatTmp_updowmLv != HEATDOWN)
+ 782   7                                  {
+ 783   8                                      if(HeatTmp_real - WindTemperCmd >= 12)
+ 784   8                                      {
+ 785   9                                          TmpPwmdelta -= 5;
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 14  
+
+ 786   9                                      }
+ 787   8                                      else
+ 788   8                                      {
+ 789   9                                          TmpPwmdelta--;
+ 790   9                                      }
+ 791   8                                  }
+ 792   7                              }          
+ 793   6                              
+ 794   6                              if(TmpPwmdelta < -48)       // 变量限幅
+ 795   6                              {
+ 796   7                                  TmpPwmdelta = -48;
+ 797   7                              }
+ 798   6                              
+ 799   6                              if(TmpPwmdelta > 9)
+ 800   6                              {
+ 801   7                                  TmpPwmdelta = 9;
+ 802   7                              }
+ 803   6                  
+ 804   6                          }
+ 805   5                          else
+ 806   5                          {
+ 807   6                              TmpPwmdelta = 0;
+ 808   6                          }
+ 809   5                      }
+ 810   4              
+ 811   4                      /* -----        档位给定    当前温度和实际温度差  电源电压误差补正--
+             ---- */
+ 812   4                      Heat_duty_act = Heat_duty + TmpPwmdelta + PWMadapt;  // 延时1200ms后，1ms执行一次
+ 813   4              
+ 814   4                      if(Heat_duty_act > Heat_duty_max + PWMadapt)    // 限幅
+ 815   4                      {
+ 816   5                          Heat_duty_act = Heat_duty_max + PWMadapt;
+ 817   5                      }
+ 818   4                
+ 819   4                      if(Heat_duty_act < 0)
+ 820   4                      {
+ 821   5                          Heat_duty_act = 0;
+ 822   5                      }
+ 823   4              
+ 824   4                      Heatduty[0] = Heat_duty_act/3;
+ 825   4                      Heatduty[1] = Heatduty[0] + Heat_duty_act%3/2;
+ 826   4                      Heatduty[2] = Heat_duty_act - Heatduty[0] - Heatduty[1];
+ 827   4              
+ 828   4                      if(Getzero_flag)            // 交流电过零点
+ 829   4                      {
+ 830   5                          Getzero_flag = 0;
+ 831   5                        
+ 832   5      //                    if(Heat_duty_cycle&0x01)  // 最低位是否为1
+ 833   5      //                    {
+ 834   5      //                        if(Heat_on_cnt == (Heat_duty_cycle/2))
+ 835   5      //                        {
+ 836   5      //                            Secoff_flag = 1;
+ 837   5      //                        }
+ 838   5      //                    }
+ 839   5      //                    else
+ 840   5      //                    {
+ 841   5      //                        Secoff_flag = 0;
+ 842   5      //                        Secoffcnt = 0;
+ 843   5      //                    }
+ 844   5                        
+ 845   5                          if(++Heat_on_cnt >= HEAT_TIMECNT_MAX)
+ 846   5                          {
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 15  
+
+ 847   6                              Heat_on_cnt = 0;
+ 848   6                              if(++Heatdutycnt > 2)
+ 849   6                              {
+ 850   7                                  Heatdutycnt = 0;
+ 851   7                              }
+ 852   6                              Heat_duty_cycle = Heatduty[Heatdutycnt];
+ 853   6                          }
+ 854   5                      
+ 855   5                          if(Heat_on_cnt < Heat_duty_cycle)
+ 856   5                          {
+ 857   6                              Heat_on_flag = 1;
+ 858   6                          }
+ 859   5                          else
+ 860   5                          {
+ 861   6                              Heat_on_flag = 0;
+ 862   6                          }
+ 863   5                      } 
+ 864   4                  
+ 865   4      //                if(Secoff_flag)
+ 866   4      //                {
+ 867   4      //                    if(++Secoffcnt > 3)
+ 868   4      //                    {
+ 869   4      //                        Secoffcnt = 0;
+ 870   4      //                        Secoff_flag = 0;
+ 871   4      //                        GP07 = !HEAT_ON_LEVEL;                             //奇数占空比在第1个�
+             -�波关闭可控硅，从而实现第二个半波的关闭
+ 872   4      //                    }
+ 873   4      //                }
+ 874   4                  }
+ 875   3                  else
+ 876   3                  {
+ 877   4                      TmpPwmdelta = 0;
+ 878   4                      Tmpregularcnt = 0;
+ 879   4                      Getzero_flag = 0;
+ 880   4                      Secoff_flag = 0;
+ 881   4                      Secoffcnt = 0;
+ 882   4                  }
+ 883   3              }
+ 884   2              else
+ 885   2              {
+ 886   3                  GP07 = !HEAT_ON_LEVEL;
+ 887   3                  Heat_on_flag = 0;
+ 888   3                  Heat_on_cnt = 0;
+ 889   3                  Heat_on_delay = 0;
+ 890   3                  Tmpregularcnt = 0;
+ 891   3                  TmpPwmdelta = 0;
+ 892   3                  Secoff_flag = 0;
+ 893   3                  Secoffcnt = 0;
+ 894   3              }
+ 895   2          }
+ 896   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2295    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =    101       9
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+C51 COMPILER V9.60.7.0   KEYSCAN                                                           08/30/2023 13:47:05 PAGE 16  
+
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

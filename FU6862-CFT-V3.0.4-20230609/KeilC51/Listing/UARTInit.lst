@@ -1,0 +1,93 @@
+C51 COMPILER V9.60.7.0   UARTINIT                                                          08/30/2023 13:47:07 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE UARTINIT
+OBJECT MODULE PLACED IN .\Output\UARTInit.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\User\Source\Hardware\UARTInit.c LARGE OMF2 WARNINGLEVEL(0) OPTIMIZE(9
+                    -,SPEED) BROWSE INCDIR(..\User\Include;..\FU68xx_Hardware_Driver\Include) DEBUG PRINT(.\Listing\UARTInit.lst) TABS(2) OBJ
+                    -ECT(.\Output\UARTInit.obj)
+
+line level    source
+
+   1          /*  -------------------------- (C) COPYRIGHT 2022 Fortiortech ShenZhen ---------------------------*/
+   2          /**
+   3           * @copyright (C) COPYRIGHT 2022 Fortiortech Shenzhen
+   4           * @file      
+   5           * @author    Fortiortech  Appliction Team
+   6           * @since     Create:2022-07-14
+   7           * @date      Last modify:2022-07-14
+   8           * @note      Last modify author is Leo.li
+   9           * @brief      
+  10           */
+  11           
+  12          #include <FU68xx_2.h>
+  13          #include <Myproject.h>
+  14          /* Private variables ----------------------------------------------------------------------------*/
+  15          MCUART Uart;
+  16          
+  17          /** 
+  18           * @brief       UART初始化
+  19           * @data        2022/08/12
+  20           */
+  21          void UART_Init(void)
+  22          {
+  23   1          SetBit(PH_SEL, UARTEN);     //p0[6]as UART_RXD; p0[5]as UART_TXD
+  24   1          UT_MOD1 = 0;
+  25   1          UT_MOD0 = 1;                //8bit波特率可变UART模式
+  26   1          SM2 = 0;                    //禁止Mode2和Mode3多机通讯
+  27   1          REN = 0;                    //使能接收
+  28   1          ES0 = 0;                    //先关中断
+  29   1          PUART1 = 0;                 //中断优先级时最低
+  30   1          PUART0 = 0;
+  31   1          UT_BAUD = 0x9b;             //default baudrate:9600-0x9b,1200-0x4E1
+  32   1          ES0 = 0;                    //发送/接受中断使能
+  33   1      }
+  34          
+  35          /** 
+  36           * @brief       SPI数据发送
+  37           * @param(sndBuf) 发送数据
+  38           * @param(len)  数据长度
+  39           * @data        2022/08/12
+  40           */ 
+  41          void UartTxdate(uint16 * sndBuf, int16 len)
+  42          {
+  43   1          uint16 i = 0;
+  44   1          
+  45   1          for (i = 0; i < len; i++)
+  46   1          {
+  47   2              UART_SendData(*sndBuf++);
+  48   2          }
+  49   1      }
+  50          /** 
+  51           * @brief       SPI数据发送
+  52           * @param(T_Data) 发送数据
+  53           * @data        2022/08/12
+C51 COMPILER V9.60.7.0   UARTINIT                                                          08/30/2023 13:47:07 PAGE 2   
+
+  54           */ 
+  55          void UART_SendData(unsigned char T_Data)
+  56          {
+  57   1          UT_DR = T_Data;
+  58   1          
+  59   1          while (!(TI == 1));     //等待发送完成
+  60   1          
+  61   1          TI = 0;                 //发送完成中断标志位清零
+  62   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    133    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      4       7
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
