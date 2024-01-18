@@ -15,7 +15,7 @@ int main ()
 	int b = 1;
 	for (int i = 1; i <= n; i++)
 	{	
-		
+		// 测试git更改
 		int a = 0; // 第一次数值前面不输出空格
 		int t = b; // 输出的数
 			b=b+i; // 行首第一个数
